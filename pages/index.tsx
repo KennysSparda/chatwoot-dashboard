@@ -49,13 +49,17 @@ export default function DashboardPage() {
     : data?.queue.waitingCount
       ? `${data.queue.waitingCount} aguardando`
       : "Fila sem espera";
-
   return (
     <div className="app-shell px-8 py-8">
       <div className="mx-auto max-w-[1600px]">
-        <div className="mb-8 flex items-center justify-between gap-4">
+        {/* CABEÇALHO ATUALIZADO */}
+        <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <Logo />
+            {/* Margem inferior (mb-4) para afastar a logo do título */}
+            <div className="mb-4">
+              <Logo />
+            </div>
+
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-main)]">
               Suporte — Painel atendimentos
             </h1>

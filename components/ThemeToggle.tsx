@@ -14,14 +14,14 @@ const themes: Array<{
 }> = [
   {
     value: "light",
-    label: "Claro",
-    shortLabel: "Claro",
+    label: "",
+    shortLabel: "",
     icon: <Sun size={14} />,
   },
   {
     value: "dark",
-    label: "Escuro",
-    shortLabel: "Escuro",
+    label: "",
+    shortLabel: "",
     icon: <Moon size={14} />,
   },
 ];

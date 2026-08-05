@@ -12,6 +12,7 @@ import ConversationList from "@/components/ConversationList";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useDashboard } from "@/hooks/useDashboard";
 import { formatSeconds } from "@/lib/chatwoot";
+import Logo from "@/components/Logo";
 
 export default function DashboardPage() {
   const { data, loading, error, lastUpdated, refresh } = useDashboard(30000);
@@ -54,8 +55,9 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-[1600px]">
         <div className="mb-8 flex items-center justify-between gap-4">
           <div>
+            <Logo />
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-main)]">
-              🚀 Suporte — Painel
+              Suporte — Painel atendimentos
             </h1>
 
             <p className="mt-1 text-sm text-[var(--text-muted)]">

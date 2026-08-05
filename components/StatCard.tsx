@@ -1,4 +1,4 @@
-import clsx from 'clsx';
+import clsx from "clsx";
 
 interface StatCardProps {
   label: string;
@@ -10,39 +10,80 @@ interface StatCardProps {
   loading?: boolean;
 }
 
-export default function StatCard({ label, value, sub, accent, alert, icon, loading }: StatCardProps) {
+export default function StatCard({
+  label,
+  value,
+  sub,
+  accent,
+  alert,
+  icon,
+  loading,
+}: StatCardProps) {
   return (
     <div
       className={clsx(
-        'rounded-xl border p-5 flex flex-col gap-3 transition-colors',
-        alert
-          ? 'bg-red-500/5 border-red-500/20'
-          : accent
-          ? 'bg-[#6c5ce7]/5 border-[#6c5ce7]/20'
-          : 'bg-[#18181b] border-zinc-800'
+        "relative overflow-hidden rounded-xl border p-5 shadow-[var(--shadow-card)] transition-colors",
+        "bg-[var(--card-bg)] border-[var(--card-border)]",
+        accent && "border-[var(--brand-border)] bg-[var(--brand-soft)]",
+        alert && "border-[var(--danger-border)] bg-[var(--danger-soft)]",
       )}
     >
-      <div className="flex items-center justify-between">
-        <span className="text-zinc-500 text-xs font-medium uppercase tracking-wider">{label}</span>
+      <div
+        className={clsx(
+          "absolute inset-x-0 top-0 h-1",
+          alert
+            ? "bg-[var(--danger)]"
+            : accent
+              ? "bg-[var(--brand)]"
+              : "bg-transparent",
+        )}
+      />
+
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
+            {label}
+          </p>
+
+          {loading ? (
+            <div className="mt-5 h-9 w-20 animate-pulse rounded-md bg-[var(--card-border)]" />
+          ) : (
+            <p
+              className={clsx(
+                "mt-4 text-3xl font-bold tabular-nums app-number-pop",
+                alert
+                  ? "text-[var(--danger)]"
+                  : accent
+                    ? "text-[var(--brand)]"
+                    : "text-[var(--text-main)]",
+              )}
+            >
+              {value}
+            </p>
+          )}
+
+          {sub && (
+            <p className="mt-3 truncate text-xs text-[var(--text-muted)]">
+              {sub}
+            </p>
+          )}
+        </div>
+
         {icon && (
-          <span className={clsx('text-base', alert ? 'text-red-400' : accent ? 'text-[#6c5ce7]' : 'text-zinc-600')}>
+          <div
+            className={clsx(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+              alert
+                ? "border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger)]"
+                : accent
+                  ? "border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand)]"
+                  : "border-[var(--card-border)] bg-[var(--app-bg-soft)] text-[var(--text-muted)]",
+            )}
+          >
             {icon}
-          </span>
+          </div>
         )}
       </div>
-      {loading ? (
-        <div className="h-8 w-16 bg-zinc-800 rounded animate-pulse" />
-      ) : (
-        <span
-          className={clsx(
-            'text-3xl font-bold tabular-nums',
-            alert ? 'text-red-400' : accent ? 'text-[#6c5ce7]' : 'text-white'
-          )}
-        >
-          {value}
-        </span>
-      )}
-      {sub && <span className="text-zinc-600 text-xs">{sub}</span>}
     </div>
   );
 }

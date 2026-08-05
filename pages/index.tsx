@@ -4,9 +4,9 @@ import {
   RefreshCw,
   TimerReset,
   Zap,
-  Users, // Importei o ícone novo
 } from "lucide-react";
 import StatCard from "@/components/StatCard";
+import AgentGoalCard from "@/components/AgentGoalCard";
 import AgentTable from "@/components/AgentTable";
 import ConversationList from "@/components/ConversationList";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -33,7 +33,6 @@ export default function DashboardPage() {
         );
       })[0] ?? null;
 
-  // Calculando as variáveis baseadas no array global do dashboard
   const onlineAgentsCount =
     data?.dashboardAgents?.filter((agent) => agent.availability === "online")
       .length ?? 0;
@@ -49,13 +48,13 @@ export default function DashboardPage() {
     : data?.queue.waitingCount
       ? `${data.queue.waitingCount} aguardando`
       : "Fila sem espera";
+
   return (
     <div className="app-shell px-8 py-8">
       <div className="mx-auto max-w-[1600px]">
-        {/* CABEÇALHO ATUALIZADO */}
+        {/* CABEÇALHO */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            {/* Margem inferior (mb-4) para afastar a logo do título */}
             <div className="mb-4">
               <Logo />
             </div>
@@ -94,14 +93,14 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* STAT CARDS PRINCIPAIS */}
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
-          {/* NOVO CARD: AGENTES */}
-          <StatCard
-            label="👥 Agentes Ativos"
-            value={onlineAgentsCount}
-            sub={`${totalAgentsCount} no total · ${busyAgentsCount} ocupados`}
-            icon={<Users size={16} />}
-            accent
+          {/* Card de agentes com meta e animação */}
+          <AgentGoalCard
+            online={onlineAgentsCount}
+            busy={busyAgentsCount}
+            total={totalAgentsCount}
+            goal={6}
             loading={loading && !data}
           />
 
@@ -148,47 +147,58 @@ export default function DashboardPage() {
           />
         </div>
 
+        {/* MINI CARDS SECUNDÁRIOS */}
         {data && (
           <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
             <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
               <p className="text-xs text-[var(--text-muted)]">
-                Fontes Chatwoot
+                🤖 Chats IA (ANA)
               </p>
-              <p className="mt-1 text-sm text-[var(--text-soft)]">
-                {Object.values(data.sources).filter(Boolean).length}/
-                {Object.values(data.sources).length} OK
+              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
+                {data.counts.pending}
               </p>
-            </div>
-
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)]">ANA IA</p>
-              <p className="mt-1 text-sm text-[var(--text-soft)]">
-                {data.aiAssistant.identified
-                  ? `${data.aiAssistant.openConversations} abertas`
-                  : "Ainda não identificada"}
+              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                conversas pendentes
               </p>
             </div>
 
             <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
               <p className="text-xs text-[var(--text-muted)]">
-                Aguardando resposta
+                ⏱️ Aguardando humano
               </p>
-              <p className="mt-1 text-sm text-[var(--text-soft)]">
+              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
                 {data.queue.waitingCount}
               </p>
+              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                em fila agora
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
+              <p className="text-xs text-[var(--text-muted)]">✅ Resolvidas</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
+                {data.counts.resolved}
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                nos últimos 7 dias
+              </p>
             </div>
 
             <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
               <p className="text-xs text-[var(--text-muted)]">
-                Período histórico
+                📊 Período histórico
               </p>
-              <p className="mt-1 text-sm text-[var(--text-soft)]">
+              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
                 Últimos 7 dias
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
+                base dos dados exibidos
               </p>
             </div>
           </div>
         )}
 
+        {/* TABELA E CONVERSAS */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
           <div className="xl:col-span-4">
             <AgentTable

@@ -61,7 +61,7 @@ export default function DashboardPage() {
             </div>
 
             <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-main)]">
-              Suporte — Painel atendimentos
+              Gestão a vista
             </h1>
 
             <p className="mt-1 text-sm text-[var(--text-muted)]">
@@ -94,7 +94,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Alterado para grid-cols-5 em telas grandes para comportar o novo card */}
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
           {/* NOVO CARD: AGENTES */}
           <StatCard

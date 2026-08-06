@@ -28,13 +28,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0d0d0f] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#eeeeee] flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center flex flex-col items-center">
-          <div className="mb-3">
-            <Logo />
-          </div>
-          <p className="text-zinc-400 text-sm mt-1">
+          <Logo />
+
+          <p className="text-zinc-400 text-sm">
             Acesso restrito ao time de suporte
           </p>
         </div>
@@ -49,7 +48,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
-              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-colors"
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2.5 text-[#ff5a5a] text-sm focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-colors"
               autoFocus
             />
           </div>

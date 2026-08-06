@@ -47,8 +47,11 @@ export default function DashboardPage() {
 
   const totalAgentsCount = data?.dashboardAgents?.length ?? 0;
 
-  const longestWaitingSub = data?.queue.longestWaitingConversation
-    ? data.queue.longestWaitingConversation.contactName
+  const longestConv = data?.queue.longestWaitingConversation;
+  const agentName = longestConv?.assigneeName;
+
+  const longestWaitingSub = longestConv
+    ? `${longestConv.contactName}${agentName ? ` · Agente: ${agentName}` : " · Não atribuído"}`
     : data?.queue.waitingCount
       ? `${data.queue.waitingCount} aguardando`
       : "Fila sem espera";

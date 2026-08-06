@@ -200,7 +200,7 @@ export default function DashboardPage() {
 
         {/* TABELA E CONVERSAS */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-          <div className="xl:col-span-4">
+          <div className="xl:col-span-3">
             <AgentTable
               agents={data?.agents ?? []}
               metrics={data?.agentMetrics ?? []}
@@ -209,7 +209,7 @@ export default function DashboardPage() {
             />
           </div>
 
-          <div className="xl:col-span-1">
+          <div className="xl:col-span-2">
             <ConversationList
               conversations={data?.recentConversations ?? []}
               baseUrl={data?.meta.baseUrl ?? ""}

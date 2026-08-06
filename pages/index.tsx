@@ -4,6 +4,10 @@ import {
   RefreshCw,
   TimerReset,
   Zap,
+  Bot,
+  Clock,
+  CheckCircle2,
+  Calendar,
 } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import AgentGoalCard from "@/components/AgentGoalCard";
@@ -94,7 +98,7 @@ export default function DashboardPage() {
         )}
 
         {/* STAT CARDS PRINCIPAIS */}
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {/* Card de agentes com meta e animação */}
           <AgentGoalCard
             online={onlineAgentsCount}
@@ -112,10 +116,10 @@ export default function DashboardPage() {
           />
 
           <StatCard
-            label="🧭 Não Atribuídas"
-            value={data?.counts.unassigned ?? "—"}
-            icon={<MessageSquareOff size={16} />}
-            alert={!!data && data.counts.unassigned > 0}
+            label="🤖 Chats IA (ANA)"
+            value={data?.counts.pending ?? "—"}
+            sub="conversas pendentes"
+            icon={<Bot size={16} />}
             loading={loading && !data}
           />
 
@@ -127,74 +131,61 @@ export default function DashboardPage() {
             alert={!!data && data.queue.longestWaitingTime >= 900}
             loading={loading && !data}
           />
-
-          <StatCard
-            label="⚡ Menor Resp. Online"
-            value={
-              fastestOnlineAgent
-                ? formatSeconds(fastestOnlineAgent.avgFirstResponseTime)
-                : "—"
-            }
-            sub={
-              fastestOnlineAgent
-                ? fastestOnlineAgent.name
-                : onlineAgentsCount > 0
-                  ? "Sem métrica válida"
-                  : "Sem agente online"
-            }
-            icon={<Zap size={16} />}
-            loading={loading && !data}
-          />
         </div>
 
-        {/* MINI CARDS SECUNDÁRIOS */}
+        {/* MINI CARDS SECUNDÁRIOS (Padronizados com StatCard) */}
         {data && (
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)]">
-                🤖 Chats IA (ANA)
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
-                {data.counts.pending}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
-                conversas pendentes
-              </p>
-            </div>
+          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+            <StatCard
+              label="🧭 Não Atribuídas"
+              value={data?.counts.unassigned ?? "—"}
+              sub="aguardando atribuição"
+              icon={<MessageSquareOff size={16} />}
+              alert={!!data && data.counts.unassigned > 0}
+              loading={loading && !data}
+            />
 
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)]">
-                ⏱️ Aguardando humano
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
-                {data.queue.waitingCount}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
-                em fila agora
-              </p>
-            </div>
+            <StatCard
+              label="⏱️ Aguardando humano"
+              value={data?.queue.waitingCount ?? "—"}
+              sub="em fila agora"
+              icon={<Clock size={16} />}
+              loading={loading && !data}
+            />
 
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)]">✅ Resolvidas</p>
-              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
-                {data.counts.resolved}
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
-                nos últimos 7 dias
-              </p>
-            </div>
+            <StatCard
+              label="⚡ Menor Resp. Online"
+              value={
+                fastestOnlineAgent
+                  ? formatSeconds(fastestOnlineAgent.avgFirstResponseTime)
+                  : "—"
+              }
+              sub={
+                fastestOnlineAgent
+                  ? fastestOnlineAgent.name
+                  : onlineAgentsCount > 0
+                    ? "Sem métrica válida"
+                    : "Sem agente online"
+              }
+              icon={<Zap size={16} />}
+              loading={loading && !data}
+            />
 
-            <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)]">
-                📊 Período histórico
-              </p>
-              <p className="mt-1 text-sm font-semibold text-[var(--text-soft)]">
-                Últimos 7 dias
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--text-faint)]">
-                base dos dados exibidos
-              </p>
-            </div>
+            <StatCard
+              label="✅ Resolvidas"
+              value={data?.counts.resolved ?? "—"}
+              sub="nos últimos 7 dias"
+              icon={<CheckCircle2 size={16} />}
+              loading={loading && !data}
+            />
+
+            <StatCard
+              label="📊 Período histórico"
+              value="Últimos 7 dias"
+              sub="base dos dados exibidos"
+              icon={<Calendar size={16} />}
+              loading={loading && !data}
+            />
           </div>
         )}
 

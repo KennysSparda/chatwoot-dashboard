@@ -17,6 +17,12 @@ import {
 
 type Settled<T> = PromiseSettledResult<T>;
 
+export interface ConversationMetrics {
+  open: number;
+  unattended: number;
+  pending: number;
+}
+
 export class ChatwootClient {
   private baseUrl: string;
   private accountId: string;
@@ -45,6 +51,78 @@ export class ChatwootClient {
     return res.json();
   }
 
+  private async fetchAllPages<T>(
+    endpoint: string,
+    extractor: (response: any) => T[],
+  ): Promise<T[]> {
+    let page = 1;
+
+    const results: T[] = [];
+
+    while (true) {
+      const response = await this.request<any>(
+        `${this.baseUrl}${endpoint}${endpoint.includes("?") ? "&" : "?"}page=${page}`,
+      );
+
+      const items = extractor(response);
+
+      if (!items.length) {
+        break;
+      }
+
+      results.push(...items);
+
+      if (items.length < 25) {
+        break;
+      }
+
+      page++;
+    }
+
+    return results;
+  }
+
+  private buildConversationMetrics(
+    conversations: Conversation[],
+  ): Map<number, ConversationMetrics> {
+    const metrics = new Map<number, ConversationMetrics>();
+
+    const ensureAgent = (agentId: number): ConversationMetrics => {
+      if (!metrics.has(agentId)) {
+        metrics.set(agentId, {
+          open: 0,
+          unattended: 0,
+          pending: 0,
+        });
+      }
+
+      return metrics.get(agentId)!;
+    };
+
+    for (const conversation of conversations) {
+      const assigneeId =
+        conversation.assignee?.id ?? conversation.meta?.assignee?.id;
+
+      if (!assigneeId) {
+        continue;
+      }
+
+      const agent = ensureAgent(assigneeId);
+
+      agent.open++;
+
+      if (conversation.waiting_since) {
+        agent.unattended++;
+      }
+
+      if (conversation.status === "pending") {
+        agent.pending++;
+      }
+    }
+
+    return metrics;
+  }
+
   private async fetchV1<T>(path: string): Promise<T> {
     return this.request<T>(
       `${this.baseUrl}/api/v1/accounts/${this.accountId}${path}`,
@@ -66,15 +144,17 @@ export class ChatwootClient {
     return data.payload ?? [];
   }
 
-  async getOpenConversationsPage(): Promise<ConversationListResponse> {
-    return this.fetchV1<ConversationListResponse>(
-      "/conversations?status=open&page=1",
+  private async getOpenConversations(): Promise<Conversation[]> {
+    return this.fetchAllPages<Conversation>(
+      `/api/v1/accounts/${this.accountId}/conversations?status=open`,
+      (response) => response.data?.payload ?? [],
     );
   }
 
-  async getPendingConversationsPage(): Promise<ConversationListResponse> {
-    return this.fetchV1<ConversationListResponse>(
-      "/conversations?status=pending&page=1",
+  private async getPendingConversations(): Promise<Conversation[]> {
+    return this.fetchAllPages<Conversation>(
+      `/api/v1/accounts/${this.accountId}/conversations?status=pending`,
+      (response) => response.data?.payload ?? [],
     );
   }
 
@@ -122,8 +202,8 @@ export class ChatwootClient {
     ] = await Promise.allSettled([
       this.getAgents(),
       this.getInboxes(),
-      this.getOpenConversationsPage(),
-      this.getPendingConversationsPage(),
+      this.getOpenConversations(),
+      this.getPendingConversations(),
       this.getAccountSummary(since, now),
       this.getHistoricalAgentMetrics(since, now),
       this.getLiveAgentMetrics(),
@@ -131,14 +211,8 @@ export class ChatwootClient {
 
     const agents = valueOrDefault(agentsResult, []);
     const inboxes = valueOrDefault(inboxesResult, []);
-    const openConversationsResponse = valueOrDefault(
-      openConversationsResult,
-      null,
-    );
-    const pendingConversationsResponse = valueOrDefault(
-      pendingConversationsResult,
-      null,
-    );
+    const openConversations = valueOrDefault(openConversationsResult, []);
+    const pendingConversations = valueOrDefault(pendingConversationsResult, []);
     const summary = valueOrDefault(summaryResult, null);
     const historicalAgentMetrics = valueOrDefault(
       historicalAgentMetricsResult,
@@ -146,33 +220,29 @@ export class ChatwootClient {
     );
     const liveAgentMetrics = valueOrDefault(liveAgentMetricsResult, []);
 
-    const openConversations = openConversationsResponse?.data?.payload ?? [];
+    const conversationMetrics =
+      this.buildConversationMetrics(openConversations);
 
-    const pendingConversations =
-      pendingConversationsResponse?.data?.payload ?? [];
+    const openCount = openConversations.length;
 
-    const openMeta = openConversationsResponse?.data?.meta;
-    const pendingMeta = pendingConversationsResponse?.data?.meta;
+    const unassignedCount = openConversations.filter(
+      (conversation) => !conversation.assignee && !conversation.meta?.assignee,
+    ).length;
 
-    const openCount = openMeta?.all_count ?? openConversations.length;
-
-    const unassignedCount =
-      openMeta?.unassigned_count ??
-      openConversations.filter((conversation) => !conversation.assignee).length;
-
-    const pendingCount = pendingMeta?.all_count ?? pendingConversations.length;
+    const pendingCount = pendingConversations.length;
 
     const resolvedCount =
       summary?.resolutions_count ?? summary?.resolved_conversations_count ?? 0;
 
     const queue = calculateQueueMetrics(openConversations, now);
 
-    const aiAssistant = calculateAiAssistantMetrics(openConversations, now);
+    const aiAssistant = calculateAiAssistantMetrics(pendingConversations, now);
 
     const dashboardAgents = normalizeDashboardAgents({
       agents,
       historicalAgentMetrics,
       liveAgentMetrics,
+      conversationMetrics,
     });
 
     const agentMetrics = mergeOpenCountIntoHistoricalMetrics(
@@ -229,6 +299,7 @@ function normalizeDashboardAgents(input: {
   agents: Agent[];
   historicalAgentMetrics: AgentMetrics[];
   liveAgentMetrics: LiveAgentMetrics[];
+  conversationMetrics: Map<number, ConversationMetrics>;
 }): DashboardAgent[] {
   const historicalMap = new Map<number, AgentMetrics>();
   const liveMap = new Map<number, LiveAgentMetrics>();
@@ -246,11 +317,13 @@ function normalizeDashboardAgents(input: {
   input.agents.forEach((agent) => ids.add(agent.id));
   input.historicalAgentMetrics.forEach((metric) => ids.add(metric.id));
   input.liveAgentMetrics.forEach((metric) => ids.add(metric.id));
+  input.conversationMetrics.forEach((_, id) => ids.add(id));
 
   return Array.from(ids).map((id) => {
     const agent = input.agents.find((item) => item.id === id);
     const historical = historicalMap.get(id);
     const live = liveMap.get(id);
+    const metric = input.conversationMetrics.get(id);
 
     const name =
       agent?.name ?? live?.name ?? historical?.name ?? `Agente ${id}`;
@@ -267,12 +340,8 @@ function normalizeDashboardAgents(input: {
       avatarUrl:
         agent?.avatar_url ?? agent?.thumbnail ?? live?.thumbnail ?? null,
       availability,
-      openConversations:
-        live?.metric?.open ??
-        historical?.open_conversations_count ??
-        agent?.conversations_count ??
-        0,
-      unattendedConversations: live?.metric?.unattended ?? 0,
+      openConversations: metric?.open ?? 0,
+      unattendedConversations: metric?.unattended ?? 0,
       resolvedConversations: historical?.resolved_conversations_count ?? 0,
       conversationsHandled: historical?.conversations_count ?? 0,
       avgFirstResponseTime: normalizeNumber(

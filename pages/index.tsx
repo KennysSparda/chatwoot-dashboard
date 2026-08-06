@@ -6,7 +6,7 @@ import {
   Zap,
   Bot,
   Clock,
-  CheckCircle2,
+  Star,
   Calendar,
 } from "lucide-react";
 import StatCard from "@/components/StatCard";
@@ -174,11 +174,20 @@ export default function DashboardPage() {
               loading={loading && !data}
             />
 
+            {/* NOVO CARD: CSAT */}
             <StatCard
-              label="✅ Resolvidas"
-              value={data?.counts.resolved ?? "—"}
-              sub="nos últimos 7 dias"
-              icon={<CheckCircle2 size={16} />}
+              label="⭐ Satisfação (CSAT)"
+              value={
+                data?.csatMetrics?.satisfactionPercentage !== undefined
+                  ? `${data.csatMetrics.satisfactionPercentage}%`
+                  : "—"
+              }
+              sub={
+                data?.csatMetrics?.totalResponses
+                  ? `${data.csatMetrics.totalResponses} avaliações (média ${data.csatMetrics.averageRating})`
+                  : "Sem avaliações no período"
+              }
+              icon={<Star size={16} />}
               loading={loading && !data}
             />
 

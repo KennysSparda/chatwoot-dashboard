@@ -215,6 +215,7 @@ export interface DashboardData {
   queue: QueueMetrics;
   aiAssistant: AiAssistantMetrics;
   sources: DashboardSourceStatus;
+  csatMetrics: CsatMetrics;
   meta: {
     baseUrl: string;
     accountId: string;
@@ -225,4 +226,10 @@ export interface DashboardData {
     };
     requestDurationMs?: number;
   };
+}
+
+export interface CsatMetrics {
+  totalResponses: number;
+  averageRating: number; // Ex: 4.8
+  satisfactionPercentage: number; // Ex: 95 (% de notas 4 e 5)
 }

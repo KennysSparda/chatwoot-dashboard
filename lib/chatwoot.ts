@@ -13,6 +13,7 @@ import {
   QueueMetrics,
   AiAssistantMetrics,
   DashboardSourceStatus,
+  CsatMetrics,
 } from "@/types/chatwoot";
 
 type Settled<T> = PromiseSettledResult<T>;
@@ -186,6 +187,14 @@ export class ChatwootClient {
     return Array.isArray(data) ? data : [];
   }
 
+  async getCsatResponses(since: number, until: number): Promise<any[]> {
+    return this.fetchAllPages<any>(
+      `/api/v1/accounts/${this.accountId}/csat_survey_responses?since=${since}&until=${until}`,
+      (response) =>
+        Array.isArray(response) ? response : (response.payload ?? []),
+    );
+  }
+
   async getDashboardData(): Promise<DashboardData> {
     const startedAt = Date.now();
     const now = Math.floor(Date.now() / 1000);
@@ -199,6 +208,7 @@ export class ChatwootClient {
       summaryResult,
       historicalAgentMetricsResult,
       liveAgentMetricsResult,
+      csatResponsesResult,
     ] = await Promise.allSettled([
       this.getAgents(),
       this.getInboxes(),
@@ -207,6 +217,7 @@ export class ChatwootClient {
       this.getAccountSummary(since, now),
       this.getHistoricalAgentMetrics(since, now),
       this.getLiveAgentMetrics(),
+      this.getCsatResponses(since, now),
     ]);
 
     const agents = valueOrDefault(agentsResult, []);
@@ -260,6 +271,10 @@ export class ChatwootClient {
       liveAgentMetrics: liveAgentMetricsResult.status === "fulfilled",
     };
 
+    const csatResponses = valueOrDefault(csatResponsesResult, []);
+
+    const csatMetrics = calculateCsatMetrics(csatResponses);
+
     return {
       counts: {
         open: openCount,
@@ -277,6 +292,7 @@ export class ChatwootClient {
       queue,
       aiAssistant,
       sources,
+      csatMetrics,
       meta: {
         baseUrl: this.baseUrl,
         accountId: this.accountId,
@@ -635,4 +651,29 @@ export function availabilityRank(status: AgentAvailability): number {
     default:
       return 2;
   }
+}
+
+function calculateCsatMetrics(responses: any[]): CsatMetrics {
+  if (!responses.length) {
+    return {
+      totalResponses: 0,
+      averageRating: 0,
+      satisfactionPercentage: 0,
+    };
+  }
+
+  const total = responses.length;
+  const sumRating = responses.reduce(
+    (acc, item) => acc + (item.rating ?? 0),
+    0,
+  );
+  const positiveResponses = responses.filter(
+    (item) => (item.rating ?? 0) >= 4,
+  ).length;
+
+  return {
+    totalResponses: total,
+    averageRating: Math.round((sumRating / total) * 10) / 10, // Arredonda para 1 casa decimal (ex: 4.7)
+    satisfactionPercentage: Math.round((positiveResponses / total) * 100), // Ex: 92%
+  };
 }

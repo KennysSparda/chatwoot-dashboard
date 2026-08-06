@@ -181,7 +181,7 @@ export default function AgentGoalCard({
           {/* Indicadores numéricos */}
           {!loading && (
             <div className="mt-4 flex flex-wrap items-center gap-1.5 font-mono">
-              {(["1", "2", "3", "4", "5", "6", "N"] as const).map((g) => {
+              {(["N", "1", "2", "3", "4", "5", "6"] as const).map((g) => {
                 const isActive = activeGear === g;
                 return (
                   <span

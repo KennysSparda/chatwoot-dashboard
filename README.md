@@ -1,40 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# Documentação do Projeto: Chatwoot Dashboard
 
-## Getting Started
+## 📌 Visão Geral
 
-First, run the development server:
+O **Chatwoot Dashboard** é um painel de controle (_Gestão à Vista_) desenvolvido em **Next.js** e **TypeScript** para monitorar, centralizar e exibir métricas de atendimento ao cliente em tempo real integradas à API do **Chatwoot**.
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+- **Framework:** Next.js (Pages Router)
+- **Linguagem:** TypeScript
+- **Estilização:** Tailwind CSS
+- **Ícones:** Lucide React
+
+---
+
+## 📂 Estrutura de Diretórios e Arquivos Principais
+
+- **`lib/chatwoot.ts`**: Cliente de integração com a API do Chatwoot. Realiza chamadas para as versões v1 e v2, paginação automática de conversas, cálculo de métricas de agentes, filas e assistente de IA (ANA).
+- **`pages/index.tsx`**: Página principal do dashboard. Contém os cards estatísticos principais, mini cards secundários de acompanhamento, listagem de agentes e conversas recentes.
+- **`pages/login.tsx`**: Tela de autenticação restrita para o time de suporte.
+- **`components/`**: Componentes reutilizáveis da interface:
+  - `Logo.tsx`: Exibição da logo oficial da empresa.
+  - `StatCard.tsx`: Cards de estatísticas padronizados.
+  - `AgentGoalCard.tsx`: Card de acompanhamento de metas dos agentes online.
+  - `AgentTable.ts` / Outros: Tabelas e elementos visuais de suporte.
+- **`public/`**: Arquivos públicos e estáticos, incluindo a logo da empresa.
+
+---
+
+## ⚡ Principais Funcionalidades
+
+1. **Painel em Tempo Real (Gestão à Vista):**
+   - Acompanhamento do status dos agentes (online, ocupados, offline).
+   - Contagem de conversas abertas, pendentes (como chats da IA ANA), não atribuídas e resolvidas nos últimos 7 dias.
+
+2. **Métricas de Atendimento e Filas:**
+   - Monitoramento do tempo de espera dos clientes na fila.
+   - Identificação da conversa com o maior tempo de espera e o agente responsável.
+
+3. **Métricas de Desempenho dos Agentes:**
+   - Cálculo de tempo médio de primeira resposta, tempo de resolução e total de conversas tratadas.
+
+4. **Segurança e Acesso:**
+   - Sistema de login protegido por senha gerenciada via API interna (`/api/login`), garantindo acesso restrito aos dados de suporte.
+
+---
+
+## 🚀 Como Executar o Projeto
+
+1. Instale as dependências:
+
+```bash
+npm install
+```
+
+2. Copie o .env.example para .env e configure as variáveis de ambiente necessárias (credenciais da API do Chatwoot e token de acesso).
+
+```bash
+cp .env.example .env
+```
+
+3. Inicie o servidor de desenvolvimento:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Gere a build de produção:
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
-
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.ts`.
-
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
-
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+```bash
+npm run build
+```

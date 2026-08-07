@@ -18,6 +18,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { formatSeconds } from "@/lib/chatwoot";
 import Logo from "@/components/Logo";
 import CsatReportCard from "@/components/CsatReportCard";
+import ConversationChartCard from "@/components/ConversationsChart";
 
 export default function DashboardPage() {
   const { data, loading, error, lastUpdated, refresh } = useDashboard(30000);
@@ -115,6 +116,7 @@ export default function DashboardPage() {
           <StatCard
             label="📥 Conversas Abertas"
             value={data?.counts.open ?? "—"}
+            sub="conversas em atendimento humano"
             icon={<Inbox size={16} />}
             loading={loading && !data}
           />
@@ -200,8 +202,31 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="mb-6">
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <CsatReportCard csat={data?.csatMetrics} loading={loading && !data} />
+          <ConversationChartCard
+            id="day"
+            title="📊 Volume de Chats — Dia (Hoje por Hora)"
+            data={data?.chartData?.day ?? []}
+            loading={loading && !data}
+            isHourly
+          />
+        </div>
+
+        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ConversationChartCard
+            id="week"
+            title="📈 Volume de Chats — Semana (Últimos 7 dias)"
+            data={data?.chartData?.week ?? []}
+            loading={loading && !data}
+          />
+
+          <ConversationChartCard
+            id="month"
+            title="📅 Volume de Chats — Mês (Últimos 30 dias)"
+            data={data?.chartData?.month ?? []}
+            loading={loading && !data}
+          />
         </div>
 
         {/* TABELA E CONVERSAS */}

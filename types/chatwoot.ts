@@ -226,6 +226,11 @@ export interface DashboardData {
     };
     requestDurationMs?: number;
   };
+  chartData: {
+    day: ReportDataPoint[];
+    week: ReportDataPoint[];
+    month: ReportDataPoint[];
+  };
 }
 
 export interface CsatMetrics {
@@ -254,4 +259,9 @@ export interface CsatMetrics {
     neutral: CsatRatingItem; // Nota 2
     bad: CsatRatingItem; // Nota 1
   };
+}
+
+export interface ReportDataPoint {
+  value: number;
+  timestamp: number;
 }

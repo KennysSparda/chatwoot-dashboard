@@ -1,7 +1,7 @@
+import { useState } from "react";
 import {
   Inbox,
   MessageSquareOff,
-  RefreshCw,
   TimerReset,
   Zap,
   Bot,
@@ -13,8 +13,10 @@ import StatCard from "@/components/StatCard";
 import AgentGoalCard from "@/components/AgentGoalCard";
 import AgentTable from "@/components/AgentTable";
 import ConversationList from "@/components/ConversationList";
-import ThemeToggle from "@/components/ThemeToggle";
+import HeaderMenu from "@/components/HeaderMenu";
+import ManageAgentsModal from "@/components/ManageAgentsModal";
 import { useDashboard } from "@/hooks/useDashboard";
+import { useAgentFilter } from "@/hooks/useAgentFilter";
 import { formatSeconds } from "@/lib/chatwoot";
 import Logo from "@/components/Logo";
 import CsatReportCard from "@/components/CsatReportCard";
@@ -22,10 +24,19 @@ import ConversationChartCard from "@/components/ConversationsChart";
 
 export default function DashboardPage() {
   const { data, loading, error, lastUpdated, refresh } = useDashboard(30000);
+  const { ignoredAgentIds, toggleAgent, mounted } = useAgentFilter();
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
+  // 1. FILTRA OS AGENTES COM BASE NA CONFIGURAÇÃO (Ignora N2, N3, etc.)
+  const rawDashboardAgents = data?.dashboardAgents ?? [];
+  const filteredDashboardAgents = mounted
+    ? rawDashboardAgents.filter((agent) => !ignoredAgentIds.includes(agent.id))
+    : rawDashboardAgents;
+
+  // 2. RECALCULA AS MÉTRICAS BASEADAS APENAS NOS AGENTES FILTRADOS (N1)
   const fastestOnlineAgent =
-    data?.dashboardAgents
-      ?.filter((agent) => {
+    filteredDashboardAgents
+      .filter((agent) => {
         return (
           agent.availability === "online" &&
           typeof agent.avgFirstResponseTime === "number" &&
@@ -39,15 +50,15 @@ export default function DashboardPage() {
         );
       })[0] ?? null;
 
-  const onlineAgentsCount =
-    data?.dashboardAgents?.filter((agent) => agent.availability === "online")
-      .length ?? 0;
+  const onlineAgentsCount = filteredDashboardAgents.filter(
+    (agent) => agent.availability === "online",
+  ).length;
 
-  const busyAgentsCount =
-    data?.dashboardAgents?.filter((agent) => agent.availability === "busy")
-      .length ?? 0;
+  const busyAgentsCount = filteredDashboardAgents.filter(
+    (agent) => agent.availability === "busy",
+  ).length;
 
-  const totalAgentsCount = data?.dashboardAgents?.length ?? 0;
+  const totalAgentsCount = filteredDashboardAgents.length;
 
   const longestConv = data?.queue.longestWaitingConversation;
   const agentName = longestConv?.assigneeName;
@@ -61,7 +72,7 @@ export default function DashboardPage() {
   return (
     <div className="app-shell px-8 py-8">
       <div className="mx-auto max-w-[1600px]">
-        {/* CABEÇALHO */}
+        {/* CABEÇALHO ATUALIZADO */}
         <div className="mb-8 flex items-start justify-between gap-4">
           <div>
             <div className="mb-4">
@@ -82,17 +93,12 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-
-            <button
-              onClick={refresh}
-              disabled={loading}
-              className="flex items-center gap-1.5 rounded-lg border border-[var(--card-border)] bg-[var(--card-bg)] px-3 py-2 text-sm text-[var(--text-soft)] transition-colors hover:bg-[var(--card-bg-hover)] disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              Atualizar
-            </button>
+          <div className="flex items-center gap-3 relative">
+            <HeaderMenu
+              onRefresh={refresh}
+              loading={loading}
+              onOpenAgentsModal={() => setIsModalOpen(true)}
+            />
           </div>
         </div>
 
@@ -104,7 +110,6 @@ export default function DashboardPage() {
 
         {/* STAT CARDS PRINCIPAIS */}
         <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {/* Card de agentes com meta e animação */}
           <AgentGoalCard
             online={onlineAgentsCount}
             busy={busyAgentsCount}
@@ -146,7 +151,7 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* MINI CARDS SECUNDÁRIOS (Padronizados com StatCard) */}
+        {/* MINI CARDS SECUNDÁRIOS */}
         {data && (
           <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
             <StatCard
@@ -236,7 +241,7 @@ export default function DashboardPage() {
               agents={data?.agents ?? []}
               metrics={data?.agentMetrics ?? []}
               liveMetrics={data?.liveAgentMetrics ?? []}
-              dashboardAgents={data?.dashboardAgents ?? []}
+              dashboardAgents={filteredDashboardAgents} // Passa os agentes filtrados para a tabela
             />
           </div>
 
@@ -249,6 +254,15 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* MODAL DE GERENCIAMENTO DE AGENTES */}
+      <ManageAgentsModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        agents={rawDashboardAgents} // Passa a lista original bruta para o modal
+        ignoredIds={ignoredAgentIds}
+        onToggleAgent={toggleAgent}
+      />
     </div>
   );
 }

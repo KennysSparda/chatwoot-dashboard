@@ -129,7 +129,7 @@ export class ChatwootClient extends ChatwootService {
     until: number,
   ): Promise<ReportSummary> {
     return this.fetchV2<ReportSummary>(
-      `/reports/summary?since=${since}&until=${until}`,
+      `/reports/summary?type=account&since=${since}&until=${until}`,
     );
   }
 
@@ -267,10 +267,40 @@ export class ChatwootClient extends ChatwootService {
   async getDashboardData(): Promise<DashboardData> {
     const startedAt = Date.now();
     const now = Math.floor(Date.now() / 1000);
-    const since = now - 7 * 86400;
-    const sevenDaysAgo = now - 7 * 24 * 60 * 60;
-    const thirtyDaysAgo = now - 30 * 24 * 60 * 60;
 
+    // Alinha o período de 7 dias civis no fuso de Brasília (mesmo padrão do painel do Chatwoot)
+    const nowDate = new Date();
+    const spDateStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(nowDate);
+
+    // Fim do dia atual
+    const until = Math.floor(
+      new Date(`${spDateStr}T23:59:59-03:00`).getTime() / 1000,
+    );
+
+    // Início de 6 dias atrás (totalizando 7 dias civis cheios, ex: Aug 1 - Aug 7)
+    const sevenDaysAgoDate = new Date(
+      new Date(`${spDateStr}T00:00:00-03:00`).getTime() - 6 * 86400 * 1000,
+    );
+    const sevenDaysAgoStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Sao_Paulo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(sevenDaysAgoDate);
+
+    const since = Math.floor(
+      new Date(`${sevenDaysAgoStr}T00:00:00-03:00`).getTime() / 1000,
+    );
+
+    const sevenDaysAgo = since;
+    const thirtyDaysAgo = Math.floor(
+      new Date(`${spDateStr}T00:00:00-03:00`).getTime() / 1000 - 29 * 86400,
+    );
     const [
       agentsResult,
       inboxesResult,
@@ -283,18 +313,20 @@ export class ChatwootClient extends ChatwootService {
       chartDayResult,
       chartWeekResult,
       chartMonthResult,
+      csatSurveysResult,
     ] = await Promise.allSettled([
       this.getAgents(),
       this.getInboxes(),
       this.getOpenConversations(),
       this.getPendingConversations(),
-      this.getAccountSummary(since, now),
-      this.getHistoricalAgentMetrics(since, now),
+      this.getAccountSummary(since, until),
+      this.getHistoricalAgentMetrics(since, until),
       this.getLiveAgentMetrics(),
-      this.getCsatResponses(since, now),
+      this.getCsatResponses(since, until),
       this.getTodayHourlyReport(),
-      this.getAccountReport("conversations_count", sevenDaysAgo, now),
-      this.getAccountReport("conversations_count", thirtyDaysAgo, now),
+      this.getAccountReport("conversations_count", sevenDaysAgo, until),
+      this.getAccountReport("conversations_count", thirtyDaysAgo, until),
+      this.getAccountReport("csat_surveys_sent", since, until),
     ]);
 
     const agents = valueOrDefault(agentsResult, []);
@@ -302,6 +334,12 @@ export class ChatwootClient extends ChatwootService {
     const openConversations = valueOrDefault(openConversationsResult, []);
     const pendingConversations = valueOrDefault(pendingConversationsResult, []);
     const summary = valueOrDefault(summaryResult, null);
+    // 🔍 LOG DE DEPURAÇÃO: Inspecione o que o Chatwoot está retornando no summary
+    console.log("🔎 [DEBUG] Conteúdo bruto do summary:", summary);
+    console.log(
+      "🔎 [DEBUG] Resultado de csatSurveysResult:",
+      csatSurveysResult,
+    );
     const historicalAgentMetrics = valueOrDefault(
       historicalAgentMetricsResult,
       [],
@@ -315,12 +353,37 @@ export class ChatwootClient extends ChatwootService {
     const unassignedCount = openConversations.filter(
       (conversation) => !conversation.assignee && !conversation.meta?.assignee,
     ).length;
-
     const pendingCount = pendingConversations.length;
-
-    const resolvedCount =
+    // 1. Inicializa a variável
+    let resolvedCount =
       summary?.resolutions_count ?? summary?.resolved_conversations_count ?? 0;
 
+    // 2. Tenta extrair do 'summary' (verificando se é Array da API V2 ou Objeto)
+    if (Array.isArray(summary)) {
+      const resolutionMetric = summary.find(
+        (m: any) =>
+          m.name === "resolutions_count" ||
+          m.name === "resolved_conversations_count",
+      );
+      resolvedCount = resolutionMetric ? Number(resolutionMetric.value) : 0;
+    } else {
+      resolvedCount =
+        summary?.resolutions_count ??
+        summary?.resolved_conversations_count ??
+        0;
+    }
+
+    // Fallback blindado caso o summary falhe
+    if (
+      !resolvedCount &&
+      historicalAgentMetrics &&
+      historicalAgentMetrics.length > 0
+    ) {
+      resolvedCount = historicalAgentMetrics.reduce(
+        (acc, agent) => acc + (agent.resolved_conversations_count ?? 0),
+        0,
+      );
+    }
     const queue = calculateQueueMetrics(openConversations, now);
 
     const aiAssistant = calculateAiAssistantMetrics(pendingConversations, now);
@@ -349,7 +412,39 @@ export class ChatwootClient extends ChatwootService {
 
     const csatResponses = valueOrDefault(csatResponsesResult, []);
 
-    const csatMetrics = calculateCsatMetrics(csatResponses, resolvedCount);
+    // Varre o summary da API V2 em busca de qualquer métrica de pesquisas enviadas
+    let surveysSent =
+      summary?.previous?.conversations_count ??
+      summary?.conversations_count ??
+      resolvedCount;
+
+    if (Array.isArray(summary)) {
+      const sentMetric = summary.find(
+        (m: any) =>
+          m.name?.includes("survey") ||
+          m.name?.includes("csat") ||
+          m.name === "csat_surveys_sent" ||
+          m.name === "surveys_sent",
+      );
+      if (sentMetric) {
+        surveysSent = Number(sentMetric.value) || 0;
+      }
+    }
+
+    // Se ainda assim não achar no summary, tenta pegar do resultado isolado caso tenha funcionado
+    if (surveysSent === 0 && csatSurveysResult.status === "fulfilled") {
+      const csatSurveysData = valueOrDefault(csatSurveysResult, []);
+      surveysSent = csatSurveysData.reduce(
+        (acc: number, curr: any) => acc + (Number(curr.value) || 0),
+        0,
+      );
+    }
+
+    const csatMetrics = calculateCsatMetrics(
+      csatResponses,
+      resolvedCount,
+      surveysSent,
+    );
 
     return {
       counts: {
@@ -380,7 +475,7 @@ export class ChatwootClient extends ChatwootService {
         generatedAt: new Date().toISOString(),
         reportPeriod: {
           since,
-          until: now,
+          until,
         },
         requestDurationMs: Date.now() - startedAt,
       },

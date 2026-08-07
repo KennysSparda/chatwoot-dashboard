@@ -10,7 +10,6 @@ interface AgentGoalCardProps {
   loading?: boolean;
 }
 
-// Coordenadas calibradas passadas por você relativas ao viewBox 160x160
 const GEAR_POS = {
   N: { x: 80, y: 80 },
   "1": { x: 53, y: 61 },
@@ -31,36 +30,41 @@ export default function AgentGoalCard({
   loading = false,
 }: AgentGoalCardProps) {
   const goalReached = online >= goal;
-  const prevOnlineRef = useRef<number | null>(null);
-  const { launch } = useConfetti();
+
+  const { launch, stop } = useConfetti();
 
   // Estados de controle da alavanca do câmbio
   const [knobPos, setKnobPos] = useState<{ x: number; y: number }>(
     GEAR_POS["N"],
   );
+
   const [displayGear, setDisplayGear] = useState<Gear>("N");
   const [activeGear, setActiveGear] = useState<Gear>("N");
 
   const currentGearRef = useRef<Gear>("N");
   const animRef = useRef(0);
 
-  // Disparo de confete ao bater a meta
+  // Mantém o confete enquanto a meta estiver atingida.
+  // Para imediatamente quando a meta cair.
   useEffect(() => {
-    if (loading) return;
-    const prev = prevOnlineRef.current;
-
-    if (prev !== null && prev < goal && online >= goal) {
-      launch();
+    if (loading) {
+      stop();
+      return;
     }
 
-    prevOnlineRef.current = online;
-  }, [online, goal, loading, launch]);
+    if (goalReached) {
+      launch();
+    } else {
+      stop();
+    }
+  }, [goalReached, loading, launch, stop]);
 
   // Lógica de animação em H do Câmbio
   useEffect(() => {
     if (loading) return;
 
-    // Define a marcha alvo limitando de N até a 6ª marcha (se > 6 fica na 6)
+    // Define a marcha alvo limitando de N até a 6ª marcha
+    // (se > 6 fica na 6)
     const targetGear = (
       online <= 0 ? "N" : String(Math.min(online, 6))
     ) as Gear;
@@ -76,17 +80,16 @@ export default function AgentGoalCard({
       const to = GEAR_POS[toGear];
       const N = GEAR_POS["N"];
 
-      // Micro atraso caso seja o carregamento inicial da tela
-      if (fromGear === "N" && prevOnlineRef.current === null) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
-
-      const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+      const sleep = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
       const move = async (x: number, y: number, wait: number) => {
         if (animRef.current !== animId) return false;
+
         setKnobPos({ x, y });
+
         await sleep(wait);
+
         return animRef.current === animId;
       };
 
@@ -168,6 +171,7 @@ export default function AgentGoalCard({
               >
                 {online}
               </p>
+
               <p className="mb-1 text-sm font-medium text-[var(--text-muted)]">
                 / {goal}
               </p>
@@ -183,6 +187,7 @@ export default function AgentGoalCard({
             <div className="mt-4 flex flex-wrap items-center gap-1.5 font-mono">
               {(["N", "1", "2", "3", "4", "5", "6"] as const).map((g) => {
                 const isActive = activeGear === g;
+
                 return (
                   <span
                     key={g}
@@ -208,8 +213,7 @@ export default function AgentGoalCard({
           <div className="h-12 w-12 shrink-0 animate-pulse rounded-xl bg-[var(--card-border)] self-center" />
         ) : (
           <div className="relative shrink-0 w-12 h-12 rounded-xl overflow-hidden border border-[var(--card-border)] bg-white dark:bg-black/20 shadow-sm flex items-center justify-center self-center">
-            {/* Contêiner interno de 160x160 que recebe o Zoom via escala.
-                O flex do pai garante que o X:80 Y:80 fique perfeitamente no centro */}
+            {/* Contêiner interno de 160x160 que recebe o Zoom via escala */}
             <div
               className="absolute w-[160px] h-[160px] flex items-center justify-center pointer-events-none"
               style={{ transform: "scale(0.6)" }}
@@ -229,7 +233,7 @@ export default function AgentGoalCard({
                 <circle
                   cx={knobPos.x}
                   cy={knobPos.y}
-                  r={14} /* Aumentado levemente para compensar o zoom out */
+                  r={14}
                   fill={
                     goalReached
                       ? "#22c55e"
@@ -242,11 +246,12 @@ export default function AgentGoalCard({
                   stroke={goalReached ? "#15803d" : "#d1d5db"}
                   strokeWidth="2"
                 />
+
                 <text
                   x={knobPos.x}
                   y={knobPos.y + 5.5}
                   textAnchor="middle"
-                  fontSize="16" /* Texto maior para leitura clara com a escala 0.6 */
+                  fontSize="16"
                   fontWeight="800"
                   fill={
                     goalReached

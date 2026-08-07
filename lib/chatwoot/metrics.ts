@@ -163,6 +163,7 @@ export function calculateAiAssistantMetrics(
 export function calculateCsatMetrics(
   responses: any[],
   resolvedCount: number = 0,
+  surveysSent: number = 0,
 ): CsatMetrics {
   const defaultBreakdown = {
     excellent: {
@@ -219,9 +220,10 @@ export function calculateCsatMetrics(
 
   const getPct = (count: number) => Number(((count / total) * 100).toFixed(2));
 
-  // Taxa de resposta = (respostas CSAT / conversas resolvidas) * 100
+  // Denominador oficial: Usa as pesquisas enviadas se existirem, caso contrário faz fallback para os resolvidos
+  const denominator = surveysSent > 0 ? surveysSent : resolvedCount;
   const responseRate =
-    resolvedCount > 0 ? Number(((total / resolvedCount) * 100).toFixed(2)) : 0;
+    denominator > 0 ? Number(((total / denominator) * 100).toFixed(2)) : 0;
 
   return {
     totalResponses: total,

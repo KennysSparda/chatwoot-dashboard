@@ -14,90 +14,123 @@ interface Particle {
 }
 
 const COLORS = [
-  "#ef4444", // brand red
-  "#f97316", // orange
-  "#facc15", // yellow
-  "#4ade80", // green
-  "#60a5fa", // blue
-  "#a78bfa", // purple
-  "#f472b6", // pink
+  "#ef4444",
+  "#f97316",
+  "#facc15",
+  "#4ade80",
+  "#60a5fa",
+  "#a78bfa",
+  "#f472b6",
 ];
+
+const MAX_PARTICLES = 45;
+const SPAWN_RATE = 2;
 
 export function useConfetti() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const particlesRef = useRef<Particle[]>([]);
+  const runningRef = useRef(false);
 
   const stop = useCallback(() => {
+    runningRef.current = false;
+
     if (animFrameRef.current !== null) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
     }
+
     if (canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
-      if (ctx)
-        ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      canvas.remove();
+      canvasRef.current = null;
     }
+
     particlesRef.current = [];
   }, []);
 
   const launch = useCallback(() => {
-    stop();
+    if (runningRef.current) return;
 
-    // Cria canvas fixo cobrindo toda a tela
+    runningRef.current = true;
+
     const canvas = document.createElement("canvas");
+
     canvas.style.cssText =
       "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999;";
+
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
     document.body.appendChild(canvas);
     canvasRef.current = canvas;
 
-    // Gera 180 partículas saindo do topo
-    const particles: Particle[] = [];
-    for (let i = 0; i < 180; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: -10 - Math.random() * 100,
-        vx: (Math.random() - 0.5) * 4,
-        vy: 2 + Math.random() * 4,
-        color: COLORS[Math.floor(Math.random() * COLORS.length)],
-        size: 6 + Math.random() * 8,
-        rotation: Math.random() * Math.PI * 2,
-        rotationSpeed: (Math.random() - 0.5) * 0.15,
-        opacity: 1,
-        shape: Math.random() > 0.5 ? "rect" : "circle",
-      });
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) {
+      stop();
+      return;
     }
-    particlesRef.current = particles;
 
-    const ctx = canvas.getContext("2d")!;
+    particlesRef.current = [];
 
-    let startTime = performance.now();
-    const DURATION = 3500; // ms
+    let lastTime = performance.now();
+
+    function createParticle(): Particle {
+      return {
+        x: Math.random() * canvas.width,
+        y: -15,
+        vx: (Math.random() - 0.5) * 2,
+        vy: 1.5 + Math.random() * 2.5,
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        size: 5 + Math.random() * 6,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.12,
+        opacity: 0.75 + Math.random() * 0.25,
+        shape: Math.random() > 0.5 ? "rect" : "circle",
+      };
+    }
 
     function animate(now: number) {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / DURATION, 1);
+      if (!ctx) return;
+      if (!runningRef.current) return;
+
+      const delta = Math.min((now - lastTime) / 16.67, 2);
+      lastTime = now;
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      let alive = 0;
+      // Cria poucas partículas por frame
+      for (let i = 0; i < SPAWN_RATE; i++) {
+        if (particlesRef.current.length < MAX_PARTICLES) {
+          particlesRef.current.push(createParticle());
+        }
+      }
 
-      for (const p of particlesRef.current) {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.12; // gravidade
-        p.rotation += p.rotationSpeed;
+      const particles = particlesRef.current;
 
-        // Fade out nos últimos 30%
-        if (progress > 0.7) {
-          p.opacity = Math.max(0, 1 - (progress - 0.7) / 0.3);
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+
+        p.x += p.vx * delta;
+        p.y += p.vy * delta;
+        p.vy += 0.08 * delta;
+        p.rotation += p.rotationSpeed * delta;
+
+        // Remove quando sai da tela
+        if (p.y > canvas.height + 30) {
+          particles.splice(i, 1);
+          continue;
         }
 
-        if (p.y < canvas.height + 20) alive++;
-
         ctx.save();
+
         ctx.globalAlpha = p.opacity;
         ctx.translate(p.x, p.y);
         ctx.rotate(p.rotation);
@@ -114,19 +147,14 @@ export function useConfetti() {
         ctx.restore();
       }
 
-      if (progress < 1 && alive > 0) {
-        animFrameRef.current = requestAnimationFrame(animate);
-      } else {
-        // Limpa canvas e remove do DOM
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        canvas.remove();
-        canvasRef.current = null;
-        animFrameRef.current = null;
-      }
+      animFrameRef.current = requestAnimationFrame(animate);
     }
 
     animFrameRef.current = requestAnimationFrame(animate);
   }, [stop]);
 
-  return { launch, stop };
+  return {
+    launch,
+    stop,
+  };
 }

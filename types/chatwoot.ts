@@ -114,6 +114,18 @@ export interface ReportSummary {
   open_conversations_count?: number;
   resolved_conversations_count?: number;
   avg_reply_time?: number;
+  previous?: {
+    incoming_messages_count?: number;
+    outgoing_messages_count?: number;
+    avg_first_response_time?: number;
+    avg_resolution_time?: number;
+    resolutions_count?: number;
+    conversations_count?: number;
+    open_conversations_count?: number;
+    resolved_conversations_count?: number;
+    reply_time?: number;
+    [key: string]: any;
+  };
 }
 
 export interface AgentMetrics {

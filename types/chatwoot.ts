@@ -233,3 +233,25 @@ export interface CsatMetrics {
   averageRating: number; // Ex: 4.8
   satisfactionPercentage: number; // Ex: 95 (% de notas 4 e 5)
 }
+
+export interface CsatRatingItem {
+  rating: number;
+  label: string;
+  emoji: string;
+  count: number;
+  percentage: number;
+}
+
+export interface CsatMetrics {
+  totalResponses: number;
+  averageRating: number;
+  satisfactionPercentage: number;
+  responseRate: number; // Porcentagem em relação às conversas resolvidas
+  breakdown: {
+    excellent: CsatRatingItem; // Nota 5
+    good: CsatRatingItem; // Nota 4
+    average: CsatRatingItem; // Nota 3
+    neutral: CsatRatingItem; // Nota 2
+    bad: CsatRatingItem; // Nota 1
+  };
+}

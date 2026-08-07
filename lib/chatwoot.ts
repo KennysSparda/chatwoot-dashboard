@@ -273,7 +273,7 @@ export class ChatwootClient {
 
     const csatResponses = valueOrDefault(csatResponsesResult, []);
 
-    const csatMetrics = calculateCsatMetrics(csatResponses);
+    const csatMetrics = calculateCsatMetrics(csatResponses, resolvedCount);
 
     return {
       counts: {
@@ -653,12 +653,43 @@ export function availabilityRank(status: AgentAvailability): number {
   }
 }
 
-function calculateCsatMetrics(responses: any[]): CsatMetrics {
-  if (!responses.length) {
+function calculateCsatMetrics(
+  responses: any[],
+  resolvedCount: number = 0,
+): CsatMetrics {
+  const defaultBreakdown = {
+    excellent: {
+      rating: 5,
+      label: "Excelente",
+      emoji: "😍",
+      count: 0,
+      percentage: 0,
+    },
+    good: { rating: 4, label: "Bom", emoji: "😜", count: 0, percentage: 0 },
+    average: {
+      rating: 3,
+      label: "Mediano",
+      emoji: "😐",
+      count: 0,
+      percentage: 0,
+    },
+    neutral: {
+      rating: 2,
+      label: "Neutro",
+      emoji: "😑",
+      count: 0,
+      percentage: 0,
+    },
+    bad: { rating: 1, label: "Ruim", emoji: "😞", count: 0, percentage: 0 },
+  };
+
+  if (!responses || !responses.length) {
     return {
       totalResponses: 0,
       averageRating: 0,
       satisfactionPercentage: 0,
+      responseRate: 0,
+      breakdown: defaultBreakdown,
     };
   }
 
@@ -671,9 +702,63 @@ function calculateCsatMetrics(responses: any[]): CsatMetrics {
     (item) => (item.rating ?? 0) >= 4,
   ).length;
 
+  const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  responses.forEach((item) => {
+    const r = Number(item.rating);
+    if (r >= 1 && r <= 5) {
+      counts[r] = (counts[r] || 0) + 1;
+    }
+  });
+
+  const getPct = (count: number) => Number(((count / total) * 100).toFixed(2));
+
+  // Taxa de resposta = (respostas CSAT / conversas resolvidas) * 100
+  const responseRate =
+    resolvedCount > 0 ? Number(((total / resolvedCount) * 100).toFixed(2)) : 0;
+
   return {
     totalResponses: total,
-    averageRating: Math.round((sumRating / total) * 10) / 10, // Arredonda para 1 casa decimal (ex: 4.7)
-    satisfactionPercentage: Math.round((positiveResponses / total) * 100), // Ex: 92%
+    averageRating: Math.round((sumRating / total) * 10) / 10,
+    satisfactionPercentage: Number(
+      ((positiveResponses / total) * 100).toFixed(2),
+    ),
+    responseRate,
+    breakdown: {
+      excellent: {
+        rating: 5,
+        label: "Excelente",
+        emoji: "😍",
+        count: counts[5],
+        percentage: getPct(counts[5]),
+      },
+      good: {
+        rating: 4,
+        label: "Bom",
+        emoji: "😜",
+        count: counts[4],
+        percentage: getPct(counts[4]),
+      },
+      average: {
+        rating: 3,
+        label: "Mediano",
+        emoji: "😐",
+        count: counts[3],
+        percentage: getPct(counts[3]),
+      },
+      neutral: {
+        rating: 2,
+        label: "Neutro",
+        emoji: "😑",
+        count: counts[2],
+        percentage: getPct(counts[2]),
+      },
+      bad: {
+        rating: 1,
+        label: "Ruim",
+        emoji: "😞",
+        count: counts[1],
+        percentage: getPct(counts[1]),
+      },
+    },
   };
 }

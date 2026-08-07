@@ -17,6 +17,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { useDashboard } from "@/hooks/useDashboard";
 import { formatSeconds } from "@/lib/chatwoot";
 import Logo from "@/components/Logo";
+import CsatReportCard from "@/components/CsatReportCard";
 
 export default function DashboardPage() {
   const { data, loading, error, lastUpdated, refresh } = useDashboard(30000);
@@ -127,11 +128,18 @@ export default function DashboardPage() {
           />
 
           <StatCard
-            label="⏳ Maior Espera Agora"
-            value={data ? formatSeconds(data.queue.longestWaitingTime) : "—"}
-            sub={longestWaitingSub}
-            icon={<TimerReset size={16} />}
-            alert={!!data && data.queue.longestWaitingTime >= 900}
+            label="⭐ Satisfação (CSAT)"
+            value={
+              data?.csatMetrics?.satisfactionPercentage !== undefined
+                ? `${data.csatMetrics.satisfactionPercentage}%`
+                : "—"
+            }
+            sub={
+              data?.csatMetrics?.totalResponses
+                ? `${data.csatMetrics.totalResponses} avaliações (média ${data.csatMetrics.averageRating})`
+                : "Sem avaliações no período"
+            }
+            icon={<Star size={16} />}
             loading={loading && !data}
           />
         </div>
@@ -157,6 +165,14 @@ export default function DashboardPage() {
             />
 
             <StatCard
+              label="⏳ Maior Espera Agora"
+              value={data ? formatSeconds(data.queue.longestWaitingTime) : "—"}
+              sub={longestWaitingSub}
+              icon={<TimerReset size={16} />}
+              alert={!!data && data.queue.longestWaitingTime >= 900}
+              loading={loading && !data}
+            />
+            <StatCard
               label="⚡ Menor Resp. Online"
               value={
                 fastestOnlineAgent
@@ -174,23 +190,6 @@ export default function DashboardPage() {
               loading={loading && !data}
             />
 
-            {/* NOVO CARD: CSAT */}
-            <StatCard
-              label="⭐ Satisfação (CSAT)"
-              value={
-                data?.csatMetrics?.satisfactionPercentage !== undefined
-                  ? `${data.csatMetrics.satisfactionPercentage}%`
-                  : "—"
-              }
-              sub={
-                data?.csatMetrics?.totalResponses
-                  ? `${data.csatMetrics.totalResponses} avaliações (média ${data.csatMetrics.averageRating})`
-                  : "Sem avaliações no período"
-              }
-              icon={<Star size={16} />}
-              loading={loading && !data}
-            />
-
             <StatCard
               label="📊 Período histórico"
               value="Últimos 7 dias"
@@ -200,6 +199,10 @@ export default function DashboardPage() {
             />
           </div>
         )}
+
+        <div className="mb-6">
+          <CsatReportCard csat={data?.csatMetrics} loading={loading && !data} />
+        </div>
 
         {/* TABELA E CONVERSAS */}
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">

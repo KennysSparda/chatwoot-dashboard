@@ -154,9 +154,15 @@ export class ChatwootClient extends ChatwootService {
 
   async getCsatResponses(since: number, until: number): Promise<any[]> {
     return this.fetchAllPages<any>(
-      `/api/v1/accounts/${this.accountId}/csat_survey_responses?since=${since}&until=${until}`,
+      `/api/v1/accounts/${this.accountId}/csat_survey_responses?since=${since}&until=${until}&sort=-created_at`,
       (response) =>
         Array.isArray(response) ? response : (response.payload ?? []),
+    );
+  }
+
+  async getCsatMetricsOfficial(since: number, until: number): Promise<any> {
+    return this.fetchV1(
+      `/csat_survey_responses/metrics?since=${since}&until=${until}`,
     );
   }
 
@@ -313,7 +319,7 @@ export class ChatwootClient extends ChatwootService {
       chartDayResult,
       chartWeekResult,
       chartMonthResult,
-      csatSurveysResult,
+      officialCsatMetricsResult,
     ] = await Promise.allSettled([
       this.getAgents(),
       this.getInboxes(),
@@ -326,7 +332,7 @@ export class ChatwootClient extends ChatwootService {
       this.getTodayHourlyReport(),
       this.getAccountReport("conversations_count", sevenDaysAgo, until),
       this.getAccountReport("conversations_count", thirtyDaysAgo, until),
-      this.getAccountReport("csat_surveys_sent", since, until),
+      this.getCsatMetricsOfficial(since, until),
     ]);
 
     const agents = valueOrDefault(agentsResult, []);
@@ -334,12 +340,7 @@ export class ChatwootClient extends ChatwootService {
     const openConversations = valueOrDefault(openConversationsResult, []);
     const pendingConversations = valueOrDefault(pendingConversationsResult, []);
     const summary = valueOrDefault(summaryResult, null);
-    // 🔍 LOG DE DEPURAÇÃO: Inspecione o que o Chatwoot está retornando no summary
-    console.log("🔎 [DEBUG] Conteúdo bruto do summary:", summary);
-    console.log(
-      "🔎 [DEBUG] Resultado de csatSurveysResult:",
-      csatSurveysResult,
-    );
+
     const historicalAgentMetrics = valueOrDefault(
       historicalAgentMetricsResult,
       [],
@@ -412,39 +413,59 @@ export class ChatwootClient extends ChatwootService {
 
     const csatResponses = valueOrDefault(csatResponsesResult, []);
 
-    // Varre o summary da API V2 em busca de qualquer métrica de pesquisas enviadas
-    let surveysSent =
-      summary?.previous?.conversations_count ??
-      summary?.conversations_count ??
-      resolvedCount;
-
-    if (Array.isArray(summary)) {
-      const sentMetric = summary.find(
-        (m: any) =>
-          m.name?.includes("survey") ||
-          m.name?.includes("csat") ||
-          m.name === "csat_surveys_sent" ||
-          m.name === "surveys_sent",
-      );
-      if (sentMetric) {
-        surveysSent = Number(sentMetric.value) || 0;
-      }
-    }
-
-    // Se ainda assim não achar no summary, tenta pegar do resultado isolado caso tenha funcionado
-    if (surveysSent === 0 && csatSurveysResult.status === "fulfilled") {
-      const csatSurveysData = valueOrDefault(csatSurveysResult, []);
-      surveysSent = csatSurveysData.reduce(
-        (acc: number, curr: any) => acc + (Number(curr.value) || 0),
-        0,
-      );
-    }
-
-    const csatMetrics = calculateCsatMetrics(
-      csatResponses,
-      resolvedCount,
-      surveysSent,
+    const officialCsatMetrics = valueOrDefault(officialCsatMetricsResult, null);
+    console.log(
+      "CSAT METRICS OFFICIAL",
+      JSON.stringify(officialCsatMetrics, null, 2),
     );
+
+    const calculatedBreakdown = calculateCsatMetrics(csatResponses, 0, 0);
+
+    const totalResponses =
+      officialCsatMetrics?.total_count ?? csatResponses.length;
+
+    const ratings = officialCsatMetrics?.ratings_count ?? {};
+
+    const rating1 = Number(ratings["1"] ?? 0);
+    const rating2 = Number(ratings["2"] ?? 0);
+    const rating3 = Number(ratings["3"] ?? 0);
+    const rating4 = Number(ratings["4"] ?? 0);
+    const rating5 = Number(ratings["5"] ?? 0);
+
+    const averageRating =
+      totalResponses > 0
+        ? (
+            (rating1 * 1 +
+              rating2 * 2 +
+              rating3 * 3 +
+              rating4 * 4 +
+              rating5 * 5) /
+            totalResponses
+          ).toFixed(1)
+        : 0;
+
+    const satisfactionPercentage =
+      totalResponses > 0
+        ? Number((((rating4 + rating5) / totalResponses) * 100).toFixed(2))
+        : 0;
+
+    const responseRate =
+      officialCsatMetrics?.total_sent_messages_count > 0
+        ? Number(
+            (
+              (totalResponses / officialCsatMetrics.total_sent_messages_count) *
+              100
+            ).toFixed(2),
+          )
+        : 0;
+
+    const csatMetrics = {
+      totalResponses,
+      averageRating: Number(averageRating),
+      satisfactionPercentage,
+      responseRate,
+      breakdown: calculatedBreakdown.breakdown,
+    };
 
     return {
       counts: {

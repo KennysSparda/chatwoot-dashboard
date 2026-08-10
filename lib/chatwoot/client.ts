@@ -9,13 +9,13 @@ import {
   DashboardData,
   DashboardSourceStatus,
   ReportDataPoint,
+  CsatMetrics,
 } from "@/types/chatwoot";
 import { ChatwootService } from "./cache";
 import {
   buildConversationMetrics,
   calculateQueueMetrics,
   calculateAiAssistantMetrics,
-  calculateCsatMetrics,
 } from "./metrics";
 import {
   valueOrDefault,
@@ -28,6 +28,24 @@ export interface ConversationMetrics {
   unattended: number;
   pending: number;
 }
+
+interface OfficialCsatMetrics {
+  total_count?: number;
+  ratings_count?: Record<string, number>;
+  total_sent_messages_count?: number;
+}
+
+const CACHE_TTL = {
+  agents: 60 * 60,
+  inboxes: 60 * 60,
+  accountSummary: 5 * 60,
+  historicalAgents: 15 * 60,
+  liveAgents: 30,
+  csat: 15 * 60,
+  chartDay: 5 * 60,
+  chartWeek: 60 * 60,
+  chartMonth: 6 * 60 * 60,
+} as const;
 
 export class ChatwootClient extends ChatwootService {
   private baseUrl: string;
@@ -45,17 +63,40 @@ export class ChatwootClient extends ChatwootService {
   }
 
   private async request<T>(url: string): Promise<T> {
-    const res = await fetch(url, {
-      headers: this.headers,
-      cache: "no-store",
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`API ${res.status}: ${text}`);
+    try {
+      const res = await fetch(url, {
+        headers: this.headers,
+        cache: "no-store",
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API ${res.status}: ${text}`);
+      }
+
+      return (await res.json()) as T;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async cached<T>(
+    key: string,
+    ttlSeconds: number,
+    loader: () => Promise<T>,
+  ): Promise<T> {
+    const cachedData = this.getFromCache<T>(key);
+    if (cachedData !== null) {
+      return cachedData;
     }
 
-    return res.json();
+    const data = await loader();
+    this.setCache(key, data, ttlSeconds);
+    return data;
   }
 
   private async fetchAllPages<T>(
@@ -63,27 +104,21 @@ export class ChatwootClient extends ChatwootService {
     extractor: (response: any) => T[],
   ): Promise<T[]> {
     let page = 1;
-
     const results: T[] = [];
 
     while (true) {
+      const separator = endpoint.includes("?") ? "&" : "?";
       const response = await this.request<any>(
-        `${this.baseUrl}${endpoint}${endpoint.includes("?") ? "&" : "?"}page=${page}`,
+        `${this.baseUrl}${endpoint}${separator}page=${page}`,
       );
-
       const items = extractor(response);
 
-      if (!items.length) {
-        break;
-      }
+      if (!items.length) break;
 
       results.push(...items);
 
-      if (items.length < 25) {
-        break;
-      }
-
-      page++;
+      if (items.length < 25) break;
+      page += 1;
     }
 
     return results;
@@ -102,25 +137,33 @@ export class ChatwootClient extends ChatwootService {
   }
 
   async getAgents(): Promise<Agent[]> {
-    return this.fetchV1<Agent[]>("/agents");
+    return this.cached(`agents_${this.accountId}`, CACHE_TTL.agents, () =>
+      this.fetchV1<Agent[]>("/agents"),
+    );
   }
 
   async getInboxes(): Promise<Inbox[]> {
-    const data = await this.fetchV1<{ payload: Inbox[] }>("/inboxes");
-    return data.payload ?? [];
+    return this.cached(
+      `inboxes_${this.accountId}`,
+      CACHE_TTL.inboxes,
+      async () => {
+        const data = await this.fetchV1<{ payload: Inbox[] }>("/inboxes");
+        return data.payload ?? [];
+      },
+    );
   }
 
   private async getOpenConversations(): Promise<Conversation[]> {
     return this.fetchAllPages<Conversation>(
       `/api/v1/accounts/${this.accountId}/conversations?status=open`,
-      (response) => response.data?.payload ?? [],
+      (response) => response.data?.payload ?? response.payload ?? [],
     );
   }
 
   private async getPendingConversations(): Promise<Conversation[]> {
     return this.fetchAllPages<Conversation>(
       `/api/v1/accounts/${this.accountId}/conversations?status=pending`,
-      (response) => response.data?.payload ?? [],
+      (response) => response.data?.payload ?? response.payload ?? [],
     );
   }
 
@@ -128,8 +171,13 @@ export class ChatwootClient extends ChatwootService {
     since: number,
     until: number,
   ): Promise<ReportSummary> {
-    return this.fetchV2<ReportSummary>(
-      `/reports/summary?type=account&since=${since}&until=${until}`,
+    return this.cached(
+      `account_summary_${this.accountId}_${since}_${until}`,
+      CACHE_TTL.accountSummary,
+      () =>
+        this.fetchV2<ReportSummary>(
+          `/reports/summary?type=account&since=${since}&until=${until}`,
+        ),
     );
   }
 
@@ -137,32 +185,42 @@ export class ChatwootClient extends ChatwootService {
     since: number,
     until: number,
   ): Promise<AgentMetrics[]> {
-    const data = await this.fetchV2<AgentMetrics[]>(
-      `/summary_reports/agent?since=${since}&until=${until}`,
+    return this.cached(
+      `historical_agents_${this.accountId}_${since}_${until}`,
+      CACHE_TTL.historicalAgents,
+      async () => {
+        const data = await this.fetchV2<AgentMetrics[]>(
+          `/summary_reports/agent?since=${since}&until=${until}`,
+        );
+        return Array.isArray(data) ? data : [];
+      },
     );
-
-    return Array.isArray(data) ? data : [];
   }
 
   async getLiveAgentMetrics(): Promise<LiveAgentMetrics[]> {
-    const data = await this.fetchV2<LiveAgentMetrics[]>(
-      "/reports/conversations/",
-    );
-
-    return Array.isArray(data) ? data : [];
-  }
-
-  async getCsatResponses(since: number, until: number): Promise<any[]> {
-    return this.fetchAllPages<any>(
-      `/api/v1/accounts/${this.accountId}/csat_survey_responses?since=${since}&until=${until}&sort=-created_at`,
-      (response) =>
-        Array.isArray(response) ? response : (response.payload ?? []),
+    return this.cached(
+      `live_agents_${this.accountId}`,
+      CACHE_TTL.liveAgents,
+      async () => {
+        const data = await this.fetchV2<LiveAgentMetrics[]>(
+          "/reports/conversations/",
+        );
+        return Array.isArray(data) ? data : [];
+      },
     );
   }
 
-  async getCsatMetricsOfficial(since: number, until: number): Promise<any> {
-    return this.fetchV1(
-      `/csat_survey_responses/metrics?since=${since}&until=${until}`,
+  async getCsatMetricsOfficial(
+    since: number,
+    until: number,
+  ): Promise<OfficialCsatMetrics> {
+    return this.cached(
+      `csat_${this.accountId}_${since}_${until}`,
+      CACHE_TTL.csat,
+      () =>
+        this.fetchV1<OfficialCsatMetrics>(
+          `/csat_survey_responses/metrics?since=${since}&until=${until}`,
+        ),
     );
   }
 
@@ -170,24 +228,20 @@ export class ChatwootClient extends ChatwootService {
     metric: string,
     since: number,
     until: number,
+    ttlSeconds: number,
   ): Promise<ReportDataPoint[]> {
-    const data = await this.fetchV2<ReportDataPoint[]>(
-      `/reports?metric=${metric}&type=account&since=${since}&until=${until}`,
-    );
-    return Array.isArray(data) ? data : [];
+    const cacheKey = `report_${this.accountId}_${metric}_${since}_${until}`;
+
+    return this.cached(cacheKey, ttlSeconds, async () => {
+      const data = await this.fetchV2<ReportDataPoint[]>(
+        `/reports?metric=${metric}&type=account&group_by=day&business_hours=false&timezone_offset=-3&since=${since}&until=${until}`,
+      );
+      return Array.isArray(data) ? data : [];
+    });
   }
 
   async getTodayHourlyReport(): Promise<ReportDataPoint[]> {
-    const cacheKey = `today_hourly_${this.accountId}`;
-    const cachedData = this.getFromCache<ReportDataPoint[]>(cacheKey);
-
-    // ⚡ Retorna do cache se ainda for válido
-    if (cachedData) {
-      return cachedData;
-    }
-
     const now = new Date();
-
     const spDateStr = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Sao_Paulo",
       year: "numeric",
@@ -195,86 +249,108 @@ export class ChatwootClient extends ChatwootService {
       day: "2-digit",
     }).format(now);
 
-    const startOfDayTime = new Date(`${spDateStr}T00:00:00-03:00`).getTime();
-    const hoursCount = new Array(24).fill(0);
-    const BRAZIL_OFFSET_MS = -3 * 3600 * 1000;
+    const since = Math.floor(
+      new Date(`${spDateStr}T00:00:00-03:00`).getTime() / 1000,
+    );
+    const until = Math.floor(
+      new Date(`${spDateStr}T23:59:59-03:00`).getTime() / 1000,
+    );
 
-    try {
-      // 🔧 Busca explícita em todos os status possíveis para capturar chats resolvidos, abertos e pendentes
-      const statuses = ["open", "pending", "resolved"];
-      const allConversationsMap = new Map<number, any>();
+    return this.cached(
+      `today_hourly_${this.accountId}_${spDateStr}`,
+      CACHE_TTL.chartDay,
+      async () => {
+        const data = await this.fetchV2<ReportDataPoint[]>(
+          `/reports?metric=conversations_count&type=account&group_by=hour&business_hours=false&timezone_offset=-3&since=${since}&until=${until}`,
+        );
+        return Array.isArray(data) ? data : [];
+      },
+    );
+  }
 
-      for (const status of statuses) {
-        let page = 1;
-        while (page <= 3) {
-          const response = await this.fetchV1<any>(
-            `/conversations?status=${status}&page=${page}`,
-          );
-          const payload = response?.data?.payload ?? response?.payload ?? [];
+  private buildCsatMetrics(
+    officialMetrics: OfficialCsatMetrics | null,
+  ): CsatMetrics {
+    const ratings = officialMetrics?.ratings_count ?? {};
+    const rating1 = Number(ratings["1"] ?? 0);
+    const rating2 = Number(ratings["2"] ?? 0);
+    const rating3 = Number(ratings["3"] ?? 0);
+    const rating4 = Number(ratings["4"] ?? 0);
+    const rating5 = Number(ratings["5"] ?? 0);
+    const ratingsTotal = rating1 + rating2 + rating3 + rating4 + rating5;
+    const totalResponses = Number(officialMetrics?.total_count ?? ratingsTotal);
+    const totalSent = Number(officialMetrics?.total_sent_messages_count ?? 0);
 
-          if (!Array.isArray(payload) || payload.length === 0) break;
+    const percentage = (count: number) =>
+      totalResponses > 0
+        ? Number(((count / totalResponses) * 100).toFixed(2))
+        : 0;
 
-          for (const conv of payload) {
-            if (conv && conv.id) {
-              allConversationsMap.set(conv.id, conv);
-            }
-          }
+    const averageRating =
+      totalResponses > 0
+        ? Number(
+            (
+              (rating1 +
+                rating2 * 2 +
+                rating3 * 3 +
+                rating4 * 4 +
+                rating5 * 5) /
+              totalResponses
+            ).toFixed(1),
+          )
+        : 0;
 
-          if (payload.length < 25) break;
-          page++;
-        }
-      }
-
-      // Processa todas as conversas unicas coletadas
-      for (const conv of allConversationsMap.values()) {
-        const activityTimestamp =
-          conv.last_activity_at ?? conv.updated_at ?? conv.created_at;
-        if (!activityTimestamp) continue;
-
-        const convDate =
-          typeof activityTimestamp === "number"
-            ? new Date(activityTimestamp * 1000)
-            : new Date(activityTimestamp);
-
-        const convTime = convDate.getTime();
-
-        if (convTime >= startOfDayTime) {
-          const brazilDate = new Date(convTime + BRAZIL_OFFSET_MS);
-          const hourBR = brazilDate.getUTCHours();
-
-          if (!isNaN(hourBR) && hourBR >= 0 && hourBR < 24) {
-            hoursCount[hourBR] += 1;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Erro ao agrupar conversas por hora:", error);
-    }
-
-    const nowBrazil = new Date(now.getTime() + BRAZIL_OFFSET_MS);
-    const currentHourBR = nowBrazil.getUTCHours();
-
-    const result = hoursCount.slice(0, currentHourBR + 1).map((count, hour) => {
-      const paddedHour = String(hour).padStart(2, "0");
-      // 🔧 Cria a data usando explicitamente o offset de Brasília, imune ao fuso local
-      const date = new Date(`${spDateStr}T${paddedHour}:00:00-03:00`);
-      return {
-        timestamp: Math.floor(date.getTime() / 1000),
-        value: count,
-      };
-    });
-
-    // 💾 Salva no cache por 3 minutos
-    this.setCache(cacheKey, result, 180);
-
-    return result;
+    return {
+      totalResponses,
+      averageRating,
+      satisfactionPercentage: percentage(rating4 + rating5),
+      responseRate:
+        totalSent > 0
+          ? Number(((totalResponses / totalSent) * 100).toFixed(2))
+          : 0,
+      breakdown: {
+        excellent: {
+          rating: 5,
+          label: "Excelente",
+          emoji: "😍",
+          count: rating5,
+          percentage: percentage(rating5),
+        },
+        good: {
+          rating: 4,
+          label: "Bom",
+          emoji: "😜",
+          count: rating4,
+          percentage: percentage(rating4),
+        },
+        average: {
+          rating: 3,
+          label: "Mediano",
+          emoji: "😐",
+          count: rating3,
+          percentage: percentage(rating3),
+        },
+        neutral: {
+          rating: 2,
+          label: "Neutro",
+          emoji: "😑",
+          count: rating2,
+          percentage: percentage(rating2),
+        },
+        bad: {
+          rating: 1,
+          label: "Ruim",
+          emoji: "😞",
+          count: rating1,
+          percentage: percentage(rating1),
+        },
+      },
+    };
   }
 
   async getDashboardData(): Promise<DashboardData> {
     const startedAt = Date.now();
     const now = Math.floor(Date.now() / 1000);
-
-    // Alinha o período de 7 dias civis no fuso de Brasília (mesmo padrão do painel do Chatwoot)
     const nowDate = new Date();
     const spDateStr = new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/Sao_Paulo",
@@ -283,30 +359,15 @@ export class ChatwootClient extends ChatwootService {
       day: "2-digit",
     }).format(nowDate);
 
-    // Fim do dia atual
+    const startOfToday = Math.floor(
+      new Date(`${spDateStr}T00:00:00-03:00`).getTime() / 1000,
+    );
     const until = Math.floor(
       new Date(`${spDateStr}T23:59:59-03:00`).getTime() / 1000,
     );
+    const since = startOfToday - 6 * 86400;
+    const thirtyDaysAgo = startOfToday - 29 * 86400;
 
-    // Início de 6 dias atrás (totalizando 7 dias civis cheios, ex: Aug 1 - Aug 7)
-    const sevenDaysAgoDate = new Date(
-      new Date(`${spDateStr}T00:00:00-03:00`).getTime() - 6 * 86400 * 1000,
-    );
-    const sevenDaysAgoStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(sevenDaysAgoDate);
-
-    const since = Math.floor(
-      new Date(`${sevenDaysAgoStr}T00:00:00-03:00`).getTime() / 1000,
-    );
-
-    const sevenDaysAgo = since;
-    const thirtyDaysAgo = Math.floor(
-      new Date(`${spDateStr}T00:00:00-03:00`).getTime() / 1000 - 29 * 86400,
-    );
     const [
       agentsResult,
       inboxesResult,
@@ -315,7 +376,6 @@ export class ChatwootClient extends ChatwootService {
       summaryResult,
       historicalAgentMetricsResult,
       liveAgentMetricsResult,
-      csatResponsesResult,
       chartDayResult,
       chartWeekResult,
       chartMonthResult,
@@ -328,10 +388,19 @@ export class ChatwootClient extends ChatwootService {
       this.getAccountSummary(since, until),
       this.getHistoricalAgentMetrics(since, until),
       this.getLiveAgentMetrics(),
-      this.getCsatResponses(since, until),
       this.getTodayHourlyReport(),
-      this.getAccountReport("conversations_count", sevenDaysAgo, until),
-      this.getAccountReport("conversations_count", thirtyDaysAgo, until),
+      this.getAccountReport(
+        "conversations_count",
+        since,
+        until,
+        CACHE_TTL.chartWeek,
+      ),
+      this.getAccountReport(
+        "conversations_count",
+        thirtyDaysAgo,
+        until,
+        CACHE_TTL.chartMonth,
+      ),
       this.getCsatMetricsOfficial(since, until),
     ]);
 
@@ -340,7 +409,6 @@ export class ChatwootClient extends ChatwootService {
     const openConversations = valueOrDefault(openConversationsResult, []);
     const pendingConversations = valueOrDefault(pendingConversationsResult, []);
     const summary = valueOrDefault(summaryResult, null);
-
     const historicalAgentMetrics = valueOrDefault(
       historicalAgentMetricsResult,
       [],
@@ -348,54 +416,39 @@ export class ChatwootClient extends ChatwootService {
     const liveAgentMetrics = valueOrDefault(liveAgentMetricsResult, []);
 
     const conversationMetrics = buildConversationMetrics(openConversations);
-
     const openCount = openConversations.length;
-
     const unassignedCount = openConversations.filter(
       (conversation) => !conversation.assignee && !conversation.meta?.assignee,
     ).length;
     const pendingCount = pendingConversations.length;
-    // 1. Inicializa a variável
+
     let resolvedCount =
       summary?.resolutions_count ?? summary?.resolved_conversations_count ?? 0;
 
-    // 2. Tenta extrair do 'summary' (verificando se é Array da API V2 ou Objeto)
     if (Array.isArray(summary)) {
       const resolutionMetric = summary.find(
-        (m: any) =>
-          m.name === "resolutions_count" ||
-          m.name === "resolved_conversations_count",
+        (item: any) =>
+          item.name === "resolutions_count" ||
+          item.name === "resolved_conversations_count",
       );
       resolvedCount = resolutionMetric ? Number(resolutionMetric.value) : 0;
-    } else {
-      resolvedCount =
-        summary?.resolutions_count ??
-        summary?.resolved_conversations_count ??
-        0;
     }
 
-    // Fallback blindado caso o summary falhe
-    if (
-      !resolvedCount &&
-      historicalAgentMetrics &&
-      historicalAgentMetrics.length > 0
-    ) {
+    if (!resolvedCount && historicalAgentMetrics.length > 0) {
       resolvedCount = historicalAgentMetrics.reduce(
-        (acc, agent) => acc + (agent.resolved_conversations_count ?? 0),
+        (total, agent) => total + (agent.resolved_conversations_count ?? 0),
         0,
       );
     }
+
     const queue = calculateQueueMetrics(openConversations, now);
-
     const aiAssistant = calculateAiAssistantMetrics(pendingConversations, now);
-
     const dashboardAgents = normalizeDashboardAgents({
       agents,
       historicalAgentMetrics,
       liveAgentMetrics,
       conversationMetrics,
     });
-
     const agentMetrics = mergeOpenCountIntoHistoricalMetrics(
       historicalAgentMetrics,
       liveAgentMetrics,
@@ -411,61 +464,8 @@ export class ChatwootClient extends ChatwootService {
       liveAgentMetrics: liveAgentMetricsResult.status === "fulfilled",
     };
 
-    const csatResponses = valueOrDefault(csatResponsesResult, []);
-
     const officialCsatMetrics = valueOrDefault(officialCsatMetricsResult, null);
-    console.log(
-      "CSAT METRICS OFFICIAL",
-      JSON.stringify(officialCsatMetrics, null, 2),
-    );
-
-    const calculatedBreakdown = calculateCsatMetrics(csatResponses, 0, 0);
-
-    const totalResponses =
-      officialCsatMetrics?.total_count ?? csatResponses.length;
-
-    const ratings = officialCsatMetrics?.ratings_count ?? {};
-
-    const rating1 = Number(ratings["1"] ?? 0);
-    const rating2 = Number(ratings["2"] ?? 0);
-    const rating3 = Number(ratings["3"] ?? 0);
-    const rating4 = Number(ratings["4"] ?? 0);
-    const rating5 = Number(ratings["5"] ?? 0);
-
-    const averageRating =
-      totalResponses > 0
-        ? (
-            (rating1 * 1 +
-              rating2 * 2 +
-              rating3 * 3 +
-              rating4 * 4 +
-              rating5 * 5) /
-            totalResponses
-          ).toFixed(1)
-        : 0;
-
-    const satisfactionPercentage =
-      totalResponses > 0
-        ? Number((((rating4 + rating5) / totalResponses) * 100).toFixed(2))
-        : 0;
-
-    const responseRate =
-      officialCsatMetrics?.total_sent_messages_count > 0
-        ? Number(
-            (
-              (totalResponses / officialCsatMetrics.total_sent_messages_count) *
-              100
-            ).toFixed(2),
-          )
-        : 0;
-
-    const csatMetrics = {
-      totalResponses,
-      averageRating: Number(averageRating),
-      satisfactionPercentage,
-      responseRate,
-      breakdown: calculatedBreakdown.breakdown,
-    };
+    const csatMetrics = this.buildCsatMetrics(officialCsatMetrics);
 
     return {
       counts: {
@@ -494,10 +494,7 @@ export class ChatwootClient extends ChatwootService {
         baseUrl: this.baseUrl,
         accountId: this.accountId,
         generatedAt: new Date().toISOString(),
-        reportPeriod: {
-          since,
-          until,
-        },
+        reportPeriod: { since, until },
         requestDurationMs: Date.now() - startedAt,
       },
     };

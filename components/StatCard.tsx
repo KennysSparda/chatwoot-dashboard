@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import clsx from "clsx";
 
 interface StatCardProps {
@@ -6,7 +7,7 @@ interface StatCardProps {
   sub?: string;
   accent?: boolean;
   alert?: boolean;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
   loading?: boolean;
 }
 
@@ -14,19 +15,23 @@ export default function StatCard({
   label,
   value,
   sub,
-  accent,
-  alert,
+  accent = false,
+  alert = false,
   icon,
-  loading,
+  loading = false,
 }: StatCardProps) {
   return (
-    <div
+    <article
       className={clsx(
-        "relative overflow-hidden rounded-xl border p-5 shadow-[var(--shadow-card)] transition-colors",
+        "relative flex min-h-[132px] min-w-0 flex-col overflow-hidden rounded-xl border p-4 shadow-[var(--shadow-card)] transition-colors",
         "bg-[var(--card-bg)] border-[var(--card-border)]",
+        "sm:min-h-[140px] sm:p-5",
+        "xl:min-h-[132px] xl:p-3",
+        "2xl:min-h-[144px] 2xl:p-4",
         accent && "border-[var(--brand-border)] bg-[var(--brand-soft)]",
         alert && "border-[var(--danger-border)] bg-[var(--danger-soft)]",
       )}
+      aria-busy={loading}
     >
       <div
         className={clsx(
@@ -39,51 +44,68 @@ export default function StatCard({
         )}
       />
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
-            {label}
-          </p>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <p
+          className={clsx(
+            "min-w-0 truncate text-xs font-semibold uppercase tracking-wide",
+            alert ? "text-[var(--danger)]" : "text-[var(--text-muted)]",
+            "sm:text-sm xl:text-[11px] 2xl:text-xs",
+          )}
+          title={label}
+        >
+          {label}
+        </p>
 
-          {loading ? (
-            <div className="mt-5 h-9 w-20 animate-pulse rounded-md bg-[var(--card-border)]" />
-          ) : (
+        {icon && (
+          <span
+            className={clsx(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+              "border-[var(--card-border)] bg-[var(--app-bg-soft)] text-[var(--text-muted)]",
+              "xl:h-8 xl:w-8 2xl:h-9 2xl:w-9",
+              alert &&
+                "border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger)]",
+              accent &&
+                !alert &&
+                "border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand)]",
+            )}
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-3 min-w-0 flex-1 xl:mt-2">
+        {loading ? (
+          <div className="space-y-3" aria-label="Carregando indicador">
+            <div className="h-8 w-24 animate-pulse rounded-md bg-[var(--card-border)]" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--card-border)]" />
+          </div>
+        ) : (
+          <>
             <p
               className={clsx(
-                "mt-4 text-3xl font-bold tabular-nums app-number-pop",
-                alert
-                  ? "text-[var(--danger)]"
-                  : accent
-                    ? "text-[var(--brand)]"
-                    : "text-[var(--text-main)]",
+                "app-number-pop truncate text-3xl font-bold leading-none tracking-tight text-[var(--text-main)]",
+                "sm:text-4xl xl:text-2xl 2xl:text-3xl",
+                alert && "text-[var(--danger)]",
+                accent && !alert && "text-[var(--brand)]",
               )}
+              title={String(value)}
             >
               {value}
             </p>
-          )}
 
-          {sub && (
-            <p className="mt-3 truncate text-xs text-[var(--text-muted)]">
-              {sub}
-            </p>
-          )}
-        </div>
-
-        {icon && (
-          <div
-            className={clsx(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
-              alert
-                ? "border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--danger)]"
-                : accent
-                  ? "border-[var(--brand-border)] bg-[var(--brand-soft)] text-[var(--brand)]"
-                  : "border-[var(--card-border)] bg-[var(--app-bg-soft)] text-[var(--text-muted)]",
+            {sub && (
+              <p
+                className="mt-3 line-clamp-2 text-xs leading-4 text-[var(--text-muted)] sm:text-sm sm:leading-5 xl:mt-2 xl:truncate xl:text-[11px] 2xl:text-xs"
+                title={sub}
+              >
+                {sub}
+              </p>
             )}
-          >
-            {icon}
-          </div>
+          </>
         )}
       </div>
-    </div>
+    </article>
   );
 }

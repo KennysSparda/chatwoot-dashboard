@@ -1,54 +1,34 @@
 import { useState } from "react";
 import {
-  Inbox,
-  MessageSquareOff,
-  TimerReset,
-  Zap,
   Bot,
   Clock,
+  Inbox,
+  MessageSquareOff,
   Star,
-  Calendar,
+  TimerReset,
 } from "lucide-react";
-import StatCard from "@/components/StatCard";
 import AgentGoalCard from "@/components/AgentGoalCard";
 import AgentTable from "@/components/AgentTable";
 import ConversationList from "@/components/ConversationList";
-import HeaderMenu from "@/components/HeaderMenu";
-import ManageAgentsModal from "@/components/ManageAgentsModal";
-import { useDashboard } from "@/hooks/useDashboard";
-import { useAgentFilter } from "@/hooks/useAgentFilter";
-import { formatSeconds } from "@/lib/chatwoot";
-import Logo from "@/components/Logo";
-import CsatReportCard from "@/components/CsatReportCard";
 import ConversationChartCard from "@/components/ConversationsChart";
+import CsatReportCard from "@/components/CsatReportCard";
+import HeaderMenu from "@/components/HeaderMenu";
+import Logo from "@/components/Logo";
+import ManageAgentsModal from "@/components/ManageAgentsModal";
+import StatCard from "@/components/StatCard";
+import { useAgentFilter } from "@/hooks/useAgentFilter";
+import { useDashboard } from "@/hooks/useDashboard";
+import { formatSeconds } from "@/lib/chatwoot";
 
 export default function DashboardPage() {
   const { data, loading, error, lastUpdated, refresh } = useDashboard(30000);
   const { ignoredAgentIds, toggleAgent, mounted } = useAgentFilter();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 1. FILTRA OS AGENTES COM BASE NA CONFIGURAÇÃO (Ignora N2, N3, etc.)
   const rawDashboardAgents = data?.dashboardAgents ?? [];
   const filteredDashboardAgents = mounted
     ? rawDashboardAgents.filter((agent) => !ignoredAgentIds.includes(agent.id))
     : rawDashboardAgents;
-
-  // 2. RECALCULA AS MÉTRICAS BASEADAS APENAS NOS AGENTES FILTRADOS (N1)
-  const fastestOnlineAgent =
-    filteredDashboardAgents
-      .filter((agent) => {
-        return (
-          agent.availability === "online" &&
-          typeof agent.avgFirstResponseTime === "number" &&
-          agent.avgFirstResponseTime > 0
-        );
-      })
-      .sort((a, b) => {
-        return (
-          (a.avgFirstResponseTime ?? Infinity) -
-          (b.avgFirstResponseTime ?? Infinity)
-        );
-      })[0] ?? null;
 
   const onlineAgentsCount = filteredDashboardAgents.filter(
     (agent) => agent.availability === "online",
@@ -59,57 +39,67 @@ export default function DashboardPage() {
   ).length;
 
   const totalAgentsCount = filteredDashboardAgents.length;
-
   const longestConv = data?.queue.longestWaitingConversation;
   const agentName = longestConv?.assigneeName;
 
   const longestWaitingSub = longestConv
-    ? `${longestConv.contactName}${agentName ? ` · Agente: ${agentName}` : " · Não atribuído"}`
+    ? `${longestConv.contactName}${
+        agentName ? ` · Agente: ${agentName}` : " · Não atribuído"
+      }`
     : data?.queue.waitingCount
       ? `${data.queue.waitingCount} aguardando`
       : "Fila sem espera";
 
+  const longestWaitingEmoji = !data
+    ? "⏳"
+    : data.queue.longestWaitingTime >= 900
+      ? "😭"
+      : data.queue.longestWaitingTime >= 300
+        ? "😐"
+        : "😊";
+
   return (
-    <div className="app-shell px-8 py-8">
-      <div className="mx-auto max-w-[1600px]">
-        {/* CABEÇALHO ATUALIZADO */}
-        <div className="mb-8 flex items-start justify-between gap-4">
-          <div>
-            <div className="mb-4">
+    <div className="app-shell min-h-screen px-3 py-3 sm:px-5 sm:py-4 xl:h-screen xl:overflow-hidden xl:px-5 xl:py-4 2xl:px-6">
+      <div className="mx-auto flex w-full max-w-[2400px] flex-col xl:h-full">
+        <header className="mb-3 flex shrink-0 items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="hidden shrink-0 sm:block [&_.revendamais_logo]:!h-16 xl:[&_.revendamais_logo]:!h-14">
               <Logo />
             </div>
 
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--text-main)]">
-              Gestão a vista
-            </h1>
-
-            <p className="mt-1 text-sm text-[var(--text-muted)]">
-              {lastUpdated
-                ? `Atualizado às ${lastUpdated.toLocaleTimeString("pt-BR")}`
-                : "Carregando..."}
-              {data?.meta.requestDurationMs
-                ? ` · ${data.meta.requestDurationMs}ms`
-                : ""}
-            </p>
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-[var(--text-main)] sm:text-2xl">
+                Gestão à vista
+              </h1>
+              <p className="mt-0.5 truncate text-xs text-[var(--text-muted)] sm:text-sm">
+                {lastUpdated
+                  ? `Últimos 7 dias · Atualizado às ${lastUpdated.toLocaleTimeString(
+                      "pt-BR",
+                    )}`
+                  : "Carregando..."}
+                {data?.meta.requestDurationMs
+                  ? ` · ${data.meta.requestDurationMs}ms`
+                  : ""}
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 relative">
+          <div className="relative shrink-0">
             <HeaderMenu
               onRefresh={refresh}
               loading={loading}
               onOpenAgentsModal={() => setIsModalOpen(true)}
             />
           </div>
-        </div>
+        </header>
 
         {error && (
-          <div className="mb-6 rounded-lg border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">
+          <div className="mb-3 shrink-0 rounded-lg border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-2 text-sm text-[var(--danger)]">
             Erro ao buscar dados: {error}
           </div>
         )}
 
-        {/* STAT CARDS PRINCIPAIS */}
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <section className="mb-3 grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 2xl:gap-3 [&>*]:min-w-0 xl:[&>*]:!p-3">
           <AgentGoalCard
             online={onlineAgentsCount}
             busy={busyAgentsCount}
@@ -119,23 +109,23 @@ export default function DashboardPage() {
           />
 
           <StatCard
-            label="📥 Conversas Abertas"
+            label="📥 Chats Abertos"
             value={data?.counts.open ?? "—"}
-            sub="conversas em atendimento humano"
+            sub="em atendimento"
             icon={<Inbox size={16} />}
             loading={loading && !data}
           />
 
           <StatCard
-            label="🤖 Chats IA (ANA)"
+            label="🤖 Chats IA"
             value={data?.counts.pending ?? "—"}
-            sub="conversas pendentes"
+            sub="pendentes com ANA"
             icon={<Bot size={16} />}
             loading={loading && !data}
           />
 
           <StatCard
-            label="⭐ Satisfação (CSAT)"
+            label="⭐ CSAT"
             value={
               data?.csatMetrics?.satisfactionPercentage !== undefined
                 ? `${data.csatMetrics.satisfactionPercentage}%`
@@ -143,123 +133,93 @@ export default function DashboardPage() {
             }
             sub={
               data?.csatMetrics?.totalResponses
-                ? `${data.csatMetrics.totalResponses} avaliações (média ${data.csatMetrics.averageRating})`
-                : "Sem avaliações no período"
+                ? `${data.csatMetrics.totalResponses} avaliações · média ${data.csatMetrics.averageRating}`
+                : "Sem avaliações"
             }
             icon={<Star size={16} />}
             loading={loading && !data}
           />
-        </div>
 
-        {/* MINI CARDS SECUNDÁRIOS */}
-        {data && (
-          <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-            <StatCard
-              label="🧭 Não Atribuídas"
-              value={data?.counts.unassigned ?? "—"}
-              sub="aguardando atribuição"
-              icon={<MessageSquareOff size={16} />}
-              alert={!!data && data.counts.unassigned > 0}
-              loading={loading && !data}
-            />
-
-            <StatCard
-              label="⏱️ Aguardando retorno"
-              value={data?.queue.waitingCount ?? "—"}
-              sub="em fila agora"
-              icon={<Clock size={16} />}
-              loading={loading && !data}
-            />
-
-            <StatCard
-              label="⏳ Maior Tempo de Espera"
-              value={data ? formatSeconds(data.queue.longestWaitingTime) : "—"}
-              sub={longestWaitingSub}
-              icon={<TimerReset size={16} />}
-              alert={!!data && data.queue.longestWaitingTime >= 900}
-              loading={loading && !data}
-            />
-            <StatCard
-              label="⚡ Menor Resp. Online"
-              value={
-                fastestOnlineAgent
-                  ? formatSeconds(fastestOnlineAgent.avgFirstResponseTime)
-                  : "—"
-              }
-              sub={
-                fastestOnlineAgent
-                  ? fastestOnlineAgent.name
-                  : onlineAgentsCount > 0
-                    ? "Sem métrica válida"
-                    : "Sem agente online"
-              }
-              icon={<Zap size={16} />}
-              loading={loading && !data}
-            />
-
-            <StatCard
-              label="📊 Período histórico"
-              value="Últimos 7 dias"
-              sub="base dos dados exibidos"
-              icon={<Calendar size={16} />}
-              loading={loading && !data}
-            />
-          </div>
-        )}
-
-        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <CsatReportCard csat={data?.csatMetrics} loading={loading && !data} />
-          <ConversationChartCard
-            id="day"
-            title="📊 Volume de Chats — Dia (Hoje por Hora)"
-            data={data?.chartData?.day ?? []}
-            loading={loading && !data}
-            isHourly
-          />
-        </div>
-
-        <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <ConversationChartCard
-            id="week"
-            title="📈 Volume de Chats — Semana (Últimos 7 dias)"
-            data={data?.chartData?.week ?? []}
+          <StatCard
+            label="🧭 Não Atribuídas"
+            value={data?.counts.unassigned ?? "—"}
+            sub="aguardando atribuição"
+            icon={<MessageSquareOff size={16} />}
+            alert={!!data && data.counts.unassigned > 0}
             loading={loading && !data}
           />
 
-          <ConversationChartCard
-            id="month"
-            title="📅 Volume de Chats — Mês (Últimos 30 dias)"
-            data={data?.chartData?.month ?? []}
+          <StatCard
+            label="⏱️ Aguardando"
+            value={data?.queue.waitingCount ?? "—"}
+            sub="em fila agora"
+            icon={<Clock size={16} />}
             loading={loading && !data}
           />
-        </div>
 
-        {/* TABELA E CONVERSAS */}
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
-          <div className="xl:col-span-3">
+          <StatCard
+            label={`${longestWaitingEmoji} Maior Espera`}
+            value={data ? formatSeconds(data.queue.longestWaitingTime) : "—"}
+            sub={longestWaitingSub}
+            icon={<TimerReset size={16} />}
+            alert={!!data && data.queue.longestWaitingTime >= 900}
+            loading={loading && !data}
+          />
+        </section>
+
+        <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-12">
+          <section className="min-w-0 xl:col-span-4 xl:min-h-0 xl:overflow-hidden">
             <AgentTable
               agents={data?.agents ?? []}
               metrics={data?.agentMetrics ?? []}
               liveMetrics={data?.liveAgentMetrics ?? []}
-              dashboardAgents={filteredDashboardAgents} // Passa os agentes filtrados para a tabela
+              dashboardAgents={filteredDashboardAgents}
             />
-          </div>
+          </section>
 
-          <div className="xl:col-span-2">
+          <section className="grid min-w-0 grid-cols-1 gap-3 xl:col-span-5 xl:min-h-0 xl:grid-rows-3 xl:overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden">
+            <ConversationChartCard
+              id="day"
+              title="📊 Hoje por hora"
+              data={data?.chartData?.day ?? []}
+              loading={loading && !data}
+              isHourly
+            />
+
+            <ConversationChartCard
+              id="week"
+              title="📈 Últimos 7 dias"
+              data={data?.chartData?.week ?? []}
+              loading={loading && !data}
+            />
+
+            <ConversationChartCard
+              id="month"
+              title="📅 Últimos 30 dias"
+              data={data?.chartData?.month ?? []}
+              loading={loading && !data}
+            />
+          </section>
+
+          <aside className="grid min-w-0 grid-cols-1 gap-3 xl:col-span-3 xl:min-h-0 xl:grid-rows-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden">
+            <CsatReportCard
+              csat={data?.csatMetrics}
+              loading={loading && !data}
+            />
+
             <ConversationList
               conversations={data?.recentConversations ?? []}
               baseUrl={data?.meta.baseUrl ?? ""}
               accountId={data?.meta.accountId ?? ""}
             />
-          </div>
-        </div>
+          </aside>
+        </main>
       </div>
 
-      {/* MODAL DE GERENCIAMENTO DE AGENTES */}
       <ManageAgentsModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        agents={rawDashboardAgents} // Passa a lista original bruta para o modal
+        agents={rawDashboardAgents}
         ignoredIds={ignoredAgentIds}
         onToggleAgent={toggleAgent}
       />

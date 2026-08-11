@@ -64,7 +64,7 @@ export class ChatwootClient extends ChatwootService {
 
   private async request<T>(url: string): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000);
+    const timeout = setTimeout(() => controller.abort(), 45_000);
 
     try {
       const res = await fetch(url, {
@@ -137,9 +137,8 @@ export class ChatwootClient extends ChatwootService {
   }
 
   async getAgents(): Promise<Agent[]> {
-    return this.cached(`agents_${this.accountId}`, CACHE_TTL.agents, () =>
-      this.fetchV1<Agent[]>("/agents"),
-    );
+    // Status de disponibilidade precisa ser consultado em tempo real.
+    return this.fetchV1<Agent[]>("/agents");
   }
 
   async getInboxes(): Promise<Inbox[]> {
@@ -198,16 +197,11 @@ export class ChatwootClient extends ChatwootService {
   }
 
   async getLiveAgentMetrics(): Promise<LiveAgentMetrics[]> {
-    return this.cached(
-      `live_agents_${this.accountId}`,
-      CACHE_TTL.liveAgents,
-      async () => {
-        const data = await this.fetchV2<LiveAgentMetrics[]>(
-          "/reports/conversations/",
-        );
-        return Array.isArray(data) ? data : [];
-      },
+    // Não usar cache: alimenta agentes online, ocupados e o câmbio.
+    const data = await this.fetchV2<LiveAgentMetrics[]>(
+      "/reports/conversations/",
     );
+    return Array.isArray(data) ? data : [];
   }
 
   async getCsatMetricsOfficial(
@@ -278,8 +272,12 @@ export class ChatwootClient extends ChatwootService {
     const rating4 = Number(ratings["4"] ?? 0);
     const rating5 = Number(ratings["5"] ?? 0);
     const ratingsTotal = rating1 + rating2 + rating3 + rating4 + rating5;
-    const totalResponses = Number(officialMetrics?.total_count ?? ratingsTotal);
-    const totalSent = Number(officialMetrics?.total_sent_messages_count ?? 0);
+    const totalResponses = Number(
+      officialMetrics?.total_count ?? ratingsTotal,
+    );
+    const totalSent = Number(
+      officialMetrics?.total_sent_messages_count ?? 0,
+    );
 
     const percentage = (count: number) =>
       totalResponses > 0
@@ -418,7 +416,8 @@ export class ChatwootClient extends ChatwootService {
     const conversationMetrics = buildConversationMetrics(openConversations);
     const openCount = openConversations.length;
     const unassignedCount = openConversations.filter(
-      (conversation) => !conversation.assignee && !conversation.meta?.assignee,
+      (conversation) =>
+        !conversation.assignee && !conversation.meta?.assignee,
     ).length;
     const pendingCount = pendingConversations.length;
 
@@ -436,13 +435,17 @@ export class ChatwootClient extends ChatwootService {
 
     if (!resolvedCount && historicalAgentMetrics.length > 0) {
       resolvedCount = historicalAgentMetrics.reduce(
-        (total, agent) => total + (agent.resolved_conversations_count ?? 0),
+        (total, agent) =>
+          total + (agent.resolved_conversations_count ?? 0),
         0,
       );
     }
 
     const queue = calculateQueueMetrics(openConversations, now);
-    const aiAssistant = calculateAiAssistantMetrics(pendingConversations, now);
+    const aiAssistant = calculateAiAssistantMetrics(
+      pendingConversations,
+      now,
+    );
     const dashboardAgents = normalizeDashboardAgents({
       agents,
       historicalAgentMetrics,
@@ -464,7 +467,10 @@ export class ChatwootClient extends ChatwootService {
       liveAgentMetrics: liveAgentMetricsResult.status === "fulfilled",
     };
 
-    const officialCsatMetrics = valueOrDefault(officialCsatMetricsResult, null);
+    const officialCsatMetrics = valueOrDefault(
+      officialCsatMetricsResult,
+      null,
+    );
     const csatMetrics = this.buildCsatMetrics(officialCsatMetrics);
 
     return {

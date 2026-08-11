@@ -4,98 +4,110 @@ import type { DashboardData } from "@/types/chatwoot";
 interface UseDashboardResult {
   data: DashboardData | null;
   loading: boolean;
+  refreshing: boolean;
   error: string | null;
   lastUpdated: Date | null;
   refresh: () => void;
 }
 
-export function useDashboard(intervalMs = 30000): UseDashboardResult {
+const REQUEST_TIMEOUT_MS = 60_000;
+
+export function useDashboard(intervalMs = 30_000): UseDashboardResult {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const fetchingRef = useRef(false);
   const mountedRef = useRef(false);
+  const hasDataRef = useRef(false);
 
   const fetchData = useCallback(async () => {
-    if (fetchingRef.current) {
-      return;
-    }
+    if (fetchingRef.current) return;
 
     fetchingRef.current = true;
-    setLoading(true);
     setError(null);
 
-    abortRef.current?.abort();
+    if (hasDataRef.current) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
+    abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     const timeoutId = window.setTimeout(() => {
       controller.abort();
-    }, 15000);
+    }, REQUEST_TIMEOUT_MS);
 
     try {
-      const res = await fetch(`/api/dashboard?t=${Date.now()}`, {
+      const response = await fetch(`/api/dashboard?t=${Date.now()}`, {
         method: "GET",
         cache: "no-store",
         headers: {
           Accept: "application/json",
           "Cache-Control": "no-cache",
-          Pragma: "no-cache",
         },
         signal: controller.signal,
       });
 
-      const json = await res.json();
+      const payload = await response.json().catch(() => null);
 
-      if (!res.ok) {
-        throw new Error(json.error ?? `HTTP ${res.status}`);
+      if (!response.ok) {
+        throw new Error(
+          payload?.error ?? `Falha ao atualizar o dashboard (${response.status})`,
+        );
       }
 
-      setData(json);
+      if (!mountedRef.current) return;
+
+      setData(payload as DashboardData);
+      hasDataRef.current = true;
       setLastUpdated(new Date());
-    } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") {
-        setError("Tempo limite ao buscar dados do dashboard.");
+    } catch (err) {
+      if (!mountedRef.current || controller.signal.aborted) {
+        if (controller.signal.aborted && mountedRef.current) {
+          setError("A atualização excedeu o limite de 60 segundos.");
+        }
         return;
       }
 
-      setError(e instanceof Error ? e.message : "Erro ao buscar dados");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erro desconhecido ao atualizar o dashboard.",
+      );
     } finally {
       window.clearTimeout(timeoutId);
+
+      if (mountedRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
+
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+      }
+
       fetchingRef.current = false;
-      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
+    void fetchData();
 
-    fetchData();
-
-    const id = window.setInterval(() => {
-      if (document.visibilityState !== "visible") {
-        return;
-      }
-
-      fetchData();
+    const intervalId = window.setInterval(() => {
+      void fetchData();
     }, intervalMs);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchData();
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       mountedRef.current = false;
-      window.clearInterval(id);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(intervalId);
       abortRef.current?.abort();
     };
   }, [fetchData, intervalMs]);
@@ -103,8 +115,9 @@ export function useDashboard(intervalMs = 30000): UseDashboardResult {
   return {
     data,
     loading,
+    refreshing,
     error,
     lastUpdated,
-    refresh: fetchData,
+    refresh: () => void fetchData(),
   };
 }

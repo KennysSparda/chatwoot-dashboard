@@ -164,7 +164,7 @@ export default function DashboardPage() {
             />
 
             <StatCard
-              label="⏱️ Aguardando humano"
+              label="⏱️ Aguardando retorno"
               value={data?.queue.waitingCount ?? "—"}
               sub="em fila agora"
               icon={<Clock size={16} />}
@@ -172,7 +172,7 @@ export default function DashboardPage() {
             />
 
             <StatCard
-              label="⏳ Maior Espera Agora"
+              label="⏳ Maior Tempo de Espera"
               value={data ? formatSeconds(data.queue.longestWaitingTime) : "—"}
               sub={longestWaitingSub}
               icon={<TimerReset size={16} />}

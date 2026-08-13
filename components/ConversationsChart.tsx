@@ -40,6 +40,10 @@ const fullDateFormatter = new Intl.DateTimeFormat("pt-BR", {
   timeZone: "America/Sao_Paulo",
 });
 
+function normalizeTimestamp(timestamp: number): number {
+  return timestamp > 10_000_000_000 ? Math.floor(timestamp / 1000) : timestamp;
+}
+
 export default function ConversationChartCard({
   id,
   title,
@@ -47,19 +51,26 @@ export default function ConversationChartCard({
   loading = false,
   isHourly = false,
 }: ConversationChartCardProps) {
-  const chartData = (data ?? []).map((item) => {
-    const date = new Date(item.timestamp * 1000);
+  const chartData = (data ?? [])
+    .map((item) => ({
+      timestamp: normalizeTimestamp(Number(item.timestamp)),
+      value: Number(item.value) || 0,
+    }))
+    .filter((item) => Number.isFinite(item.timestamp))
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .map((item) => {
+      const date = new Date(item.timestamp * 1000);
 
-    return {
-      name: isHourly
-        ? hourFormatter.format(date)
-        : dateFormatter.format(date).replace(".", ""),
-      Chats: Number(item.value) || 0,
-      fullDate: isHourly
-        ? `Hoje às ${hourFormatter.format(date)}`
-        : fullDateFormatter.format(date),
-    };
-  });
+      return {
+        name: isHourly
+          ? hourFormatter.format(date)
+          : dateFormatter.format(date).replace(".", ""),
+        Chats: item.value,
+        fullDate: isHourly
+          ? `Hoje às ${hourFormatter.format(date)}`
+          : fullDateFormatter.format(date),
+      };
+    });
 
   return (
     <article className="app-card flex min-h-[260px] min-w-0 flex-col overflow-hidden rounded-xl p-3 sm:min-h-[300px] sm:p-4 xl:h-full xl:min-h-0 xl:p-3 2xl:p-4">

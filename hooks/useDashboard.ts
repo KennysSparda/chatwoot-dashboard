@@ -28,12 +28,14 @@ export function useDashboard(
   const fetchingRef = useRef(false);
   const mountedRef = useRef(false);
   const hasDataRef = useRef(false);
+  const requestSeqRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (fetchingRef.current) return;
 
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     fetchingRef.current = true;
-    setError(null);
 
     if (hasDataRef.current) {
       setRefreshing(true);
@@ -41,11 +43,12 @@ export function useDashboard(
       setLoading(true);
     }
 
-    abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    let didTimeout = false;
 
     const timeoutId = window.setTimeout(() => {
+      didTimeout = true;
       controller.abort();
     }, REQUEST_TIMEOUT_MS);
 
@@ -73,14 +76,17 @@ export function useDashboard(
         );
       }
 
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
 
       setData(payload as DashboardData);
       hasDataRef.current = true;
       setLastUpdated(new Date());
+      setError(null);
     } catch (err) {
-      if (!mountedRef.current || controller.signal.aborted) {
-        if (controller.signal.aborted && mountedRef.current) {
+      if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
+
+      if (controller.signal.aborted) {
+        if (didTimeout) {
           setError("A atualização excedeu o limite de 60 segundos.");
         }
         return;
@@ -94,7 +100,7 @@ export function useDashboard(
     } finally {
       window.clearTimeout(timeoutId);
 
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === requestSeqRef.current) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -103,7 +109,9 @@ export function useDashboard(
         abortRef.current = null;
       }
 
-      fetchingRef.current = false;
+      if (requestSeq === requestSeqRef.current) {
+        fetchingRef.current = false;
+      }
     }
   }, [since, until, preset]);
 

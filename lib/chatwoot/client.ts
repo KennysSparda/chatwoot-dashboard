@@ -10,6 +10,7 @@ import {
   DashboardSourceStatus,
   ReportDataPoint,
   CsatMetrics,
+  DashboardPeriodPreset,
 } from "@/types/chatwoot";
 import { ChatwootService } from "./cache";
 import {
@@ -33,6 +34,83 @@ interface OfficialCsatMetrics {
   total_count?: number;
   ratings_count?: Record<string, number>;
   total_sent_messages_count?: number;
+}
+
+interface PeriodRange {
+  since: number;
+  until: number;
+}
+
+function getDefaultPeriodRange(
+  preset: DashboardPeriodPreset,
+  startOfToday: number,
+  endOfToday: number,
+): PeriodRange {
+  switch (preset) {
+    case "today":
+      return {
+        since: startOfToday,
+        until: endOfToday,
+      };
+
+    case "last30days":
+      return {
+        since: startOfToday - 29 * 86400,
+        until: endOfToday,
+      };
+
+    case "last7days":
+    case "custom":
+    default:
+      return {
+        since: startOfToday - 6 * 86400,
+        until: endOfToday,
+      };
+  }
+}
+
+function resolvePeriodRange(
+  preset: DashboardPeriodPreset,
+  startOfToday: number,
+  endOfToday: number,
+  requestedSince?: number,
+  requestedUntil?: number,
+): PeriodRange {
+  const defaults = getDefaultPeriodRange(preset, startOfToday, endOfToday);
+
+  return {
+    since: requestedSince ?? defaults.since,
+    until: requestedUntil ?? defaults.until,
+  };
+}
+
+function normalizeReportTimestamp(timestamp: number): number {
+  return timestamp > 10_000_000_000 ? Math.floor(timestamp / 1000) : timestamp;
+}
+
+function normalizeReportDataPoints(
+  data: ReportDataPoint[],
+  since: number,
+  until: number,
+): ReportDataPoint[] {
+  const grouped = new Map<number, number>();
+
+  for (const point of data) {
+    const timestamp = normalizeReportTimestamp(Number(point.timestamp));
+    const value = Number(point.value) || 0;
+
+    if (!Number.isFinite(timestamp)) continue;
+    if (timestamp < since || timestamp > until) continue;
+
+    grouped.set(timestamp, (grouped.get(timestamp) ?? 0) + value);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([timestamp, value]) => ({
+      timestamp,
+      value,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp);
 }
 
 const CACHE_TTL = {
@@ -223,42 +301,39 @@ export class ChatwootClient extends ChatwootService {
     since: number,
     until: number,
     ttlSeconds: number,
+    groupBy: "hour" | "day" = "day",
   ): Promise<ReportDataPoint[]> {
-    const cacheKey = `report_${this.accountId}_${metric}_${since}_${until}`;
+    const cacheKey = `report_${this.accountId}_${metric}_${groupBy}_${since}_${until}`;
 
     return this.cached(cacheKey, ttlSeconds, async () => {
       const data = await this.fetchV2<ReportDataPoint[]>(
-        `/reports?metric=${metric}&type=account&group_by=day&business_hours=false&timezone_offset=-3&since=${since}&until=${until}`,
+        `/reports?metric=${metric}&type=account&group_by=${groupBy}&business_hours=false&timezone_offset=-3&since=${since}&until=${until}`,
       );
-      return Array.isArray(data) ? data : [];
+      return Array.isArray(data)
+        ? normalizeReportDataPoints(data, since, until)
+        : [];
     });
   }
 
-  async getTodayHourlyReport(): Promise<ReportDataPoint[]> {
-    const now = new Date();
-    const spDateStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Sao_Paulo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(now);
+  async getSelectedConversationReport(
+    preset: DashboardPeriodPreset,
+    since: number,
+    until: number,
+  ): Promise<ReportDataPoint[]> {
+    const groupBy = preset === "today" ? "hour" : "day";
+    const ttlSeconds =
+      preset === "today"
+        ? CACHE_TTL.chartDay
+        : preset === "last30days"
+          ? CACHE_TTL.chartMonth
+          : CACHE_TTL.chartWeek;
 
-    const since = Math.floor(
-      new Date(`${spDateStr}T00:00:00-03:00`).getTime() / 1000,
-    );
-    const until = Math.floor(
-      new Date(`${spDateStr}T23:59:59-03:00`).getTime() / 1000,
-    );
-
-    return this.cached(
-      `today_hourly_${this.accountId}_${spDateStr}`,
-      CACHE_TTL.chartDay,
-      async () => {
-        const data = await this.fetchV2<ReportDataPoint[]>(
-          `/reports?metric=conversations_count&type=account&group_by=hour&business_hours=false&timezone_offset=-3&since=${since}&until=${until}`,
-        );
-        return Array.isArray(data) ? data : [];
-      },
+    return this.getAccountReport(
+      "conversations_count",
+      since,
+      until,
+      ttlSeconds,
+      groupBy,
     );
   }
 
@@ -272,12 +347,8 @@ export class ChatwootClient extends ChatwootService {
     const rating4 = Number(ratings["4"] ?? 0);
     const rating5 = Number(ratings["5"] ?? 0);
     const ratingsTotal = rating1 + rating2 + rating3 + rating4 + rating5;
-    const totalResponses = Number(
-      officialMetrics?.total_count ?? ratingsTotal,
-    );
-    const totalSent = Number(
-      officialMetrics?.total_sent_messages_count ?? 0,
-    );
+    const totalResponses = Number(officialMetrics?.total_count ?? ratingsTotal);
+    const totalSent = Number(officialMetrics?.total_sent_messages_count ?? 0);
 
     const percentage = (count: number) =>
       totalResponses > 0
@@ -346,7 +417,11 @@ export class ChatwootClient extends ChatwootService {
     };
   }
 
-  async getDashboardData(): Promise<DashboardData> {
+  async getDashboardData(
+    requestedSince?: number,
+    requestedUntil?: number,
+    requestedPreset: DashboardPeriodPreset = "last7days",
+  ): Promise<DashboardData> {
     const startedAt = Date.now();
     const now = Math.floor(Date.now() / 1000);
     const nowDate = new Date();
@@ -360,11 +435,17 @@ export class ChatwootClient extends ChatwootService {
     const startOfToday = Math.floor(
       new Date(`${spDateStr}T00:00:00-03:00`).getTime() / 1000,
     );
-    const until = Math.floor(
+    const endOfToday = Math.floor(
       new Date(`${spDateStr}T23:59:59-03:00`).getTime() / 1000,
     );
-    const since = startOfToday - 6 * 86400;
-    const thirtyDaysAgo = startOfToday - 29 * 86400;
+
+    const { since, until } = resolvePeriodRange(
+      requestedPreset,
+      startOfToday,
+      endOfToday,
+      requestedSince,
+      requestedUntil,
+    );
 
     const [
       agentsResult,
@@ -374,9 +455,7 @@ export class ChatwootClient extends ChatwootService {
       summaryResult,
       historicalAgentMetricsResult,
       liveAgentMetricsResult,
-      chartDayResult,
-      chartWeekResult,
-      chartMonthResult,
+      selectedChartResult,
       officialCsatMetricsResult,
     ] = await Promise.allSettled([
       this.getAgents(),
@@ -386,19 +465,7 @@ export class ChatwootClient extends ChatwootService {
       this.getAccountSummary(since, until),
       this.getHistoricalAgentMetrics(since, until),
       this.getLiveAgentMetrics(),
-      this.getTodayHourlyReport(),
-      this.getAccountReport(
-        "conversations_count",
-        since,
-        until,
-        CACHE_TTL.chartWeek,
-      ),
-      this.getAccountReport(
-        "conversations_count",
-        thirtyDaysAgo,
-        until,
-        CACHE_TTL.chartMonth,
-      ),
+      this.getSelectedConversationReport(requestedPreset, since, until),
       this.getCsatMetricsOfficial(since, until),
     ]);
 
@@ -416,8 +483,7 @@ export class ChatwootClient extends ChatwootService {
     const conversationMetrics = buildConversationMetrics(openConversations);
     const openCount = openConversations.length;
     const unassignedCount = openConversations.filter(
-      (conversation) =>
-        !conversation.assignee && !conversation.meta?.assignee,
+      (conversation) => !conversation.assignee && !conversation.meta?.assignee,
     ).length;
     const pendingCount = pendingConversations.length;
 
@@ -435,17 +501,13 @@ export class ChatwootClient extends ChatwootService {
 
     if (!resolvedCount && historicalAgentMetrics.length > 0) {
       resolvedCount = historicalAgentMetrics.reduce(
-        (total, agent) =>
-          total + (agent.resolved_conversations_count ?? 0),
+        (total, agent) => total + (agent.resolved_conversations_count ?? 0),
         0,
       );
     }
 
     const queue = calculateQueueMetrics(openConversations, now);
-    const aiAssistant = calculateAiAssistantMetrics(
-      pendingConversations,
-      now,
-    );
+    const aiAssistant = calculateAiAssistantMetrics(pendingConversations, now);
     const dashboardAgents = normalizeDashboardAgents({
       agents,
       historicalAgentMetrics,
@@ -467,10 +529,7 @@ export class ChatwootClient extends ChatwootService {
       liveAgentMetrics: liveAgentMetricsResult.status === "fulfilled",
     };
 
-    const officialCsatMetrics = valueOrDefault(
-      officialCsatMetricsResult,
-      null,
-    );
+    const officialCsatMetrics = valueOrDefault(officialCsatMetricsResult, null);
     const csatMetrics = this.buildCsatMetrics(officialCsatMetrics);
 
     return {
@@ -492,15 +551,13 @@ export class ChatwootClient extends ChatwootService {
       sources,
       csatMetrics,
       chartData: {
-        day: valueOrDefault(chartDayResult, []),
-        week: valueOrDefault(chartWeekResult, []),
-        month: valueOrDefault(chartMonthResult, []),
+        selected: valueOrDefault(selectedChartResult, []),
       },
       meta: {
         baseUrl: this.baseUrl,
         accountId: this.accountId,
         generatedAt: new Date().toISOString(),
-        reportPeriod: { since, until },
+        reportPeriod: { since, until, preset: requestedPreset },
         requestDurationMs: Date.now() - startedAt,
       },
     };

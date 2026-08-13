@@ -18,16 +18,44 @@ import ManageAgentsModal from "@/components/ManageAgentsModal";
 import StatCard from "@/components/StatCard";
 import { useAgentFilter } from "@/hooks/useAgentFilter";
 import { useDashboard } from "@/hooks/useDashboard";
+import { useDashboardPeriod } from "@/hooks/useDashboardPeriod";
 import { formatSeconds } from "@/lib/chatwoot";
 
+function getPeriodLabel(
+  preset: "today" | "last7days" | "last30days" | "custom",
+) {
+  if (preset === "today") return "Hoje";
+  if (preset === "last7days") return "Últimos 7 dias";
+  if (preset === "last30days") return "Últimos 30 dias";
+  return "Personalizado";
+}
+
 export default function DashboardPage() {
-  const { data, loading, error, lastUpdated, refresh } = useDashboard(30000);
+  const {
+    period,
+    draftPeriod,
+    hasPendingChanges,
+    selectPreset,
+    setStartDate,
+    setEndDate,
+    applyPeriod,
+  } = useDashboardPeriod();
+  const { data, loading, refreshing, error, lastUpdated, refresh } = useDashboard(
+    period.since,
+    period.until,
+    period.preset,
+    30000,
+  );
   const { ignoredAgentIds, toggleAgent, mounted } = useAgentFilter();
   const [isModalOpen, setIsModalOpen] = useState(false);
 
+  const periodLabel = getPeriodLabel(period.preset);
+
   const rawDashboardAgents = data?.dashboardAgents ?? [];
   const filteredDashboardAgents = mounted
-    ? rawDashboardAgents.filter((agent) => !ignoredAgentIds.includes(agent.id))
+    ? rawDashboardAgents.filter(
+        (agent) => !ignoredAgentIds.includes(agent.id),
+      )
     : rawDashboardAgents;
 
   const onlineAgentsCount = filteredDashboardAgents.filter(
@@ -73,7 +101,7 @@ export default function DashboardPage() {
               </h1>
               <p className="mt-0.5 truncate text-xs text-[var(--text-muted)] sm:text-sm">
                 {lastUpdated
-                  ? `Últimos 7 dias · Atualizado às ${lastUpdated.toLocaleTimeString(
+                  ? `${periodLabel} · Atualizado às ${lastUpdated.toLocaleTimeString(
                       "pt-BR",
                     )}`
                   : "Carregando..."}
@@ -88,7 +116,14 @@ export default function DashboardPage() {
             <HeaderMenu
               onRefresh={refresh}
               loading={loading}
+              refreshing={refreshing}
               onOpenAgentsModal={() => setIsModalOpen(true)}
+              period={draftPeriod}
+              onSelectPreset={selectPreset}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+              onApplyPeriod={applyPeriod}
+              hasPendingPeriodChanges={hasPendingChanges}
             />
           </div>
         </header>
@@ -177,27 +212,13 @@ export default function DashboardPage() {
             />
           </section>
 
-          <section className="grid min-w-0 grid-cols-1 gap-3 xl:col-span-5 xl:min-h-0 xl:grid-rows-3 xl:overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden">
+          <section className="min-w-0 xl:col-span-5 xl:min-h-0 xl:overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden">
             <ConversationChartCard
-              id="day"
-              title="📊 Hoje por hora"
-              data={data?.chartData?.day ?? []}
+              id="selected-period"
+              title={`📊 Volume de Chats — ${periodLabel}`}
+              data={data?.chartData?.selected ?? []}
               loading={loading && !data}
-              isHourly
-            />
-
-            <ConversationChartCard
-              id="week"
-              title="📈 Últimos 7 dias"
-              data={data?.chartData?.week ?? []}
-              loading={loading && !data}
-            />
-
-            <ConversationChartCard
-              id="month"
-              title="📅 Últimos 30 dias"
-              data={data?.chartData?.month ?? []}
-              loading={loading && !data}
+              isHourly={period.preset === "today"}
             />
           </section>
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DashboardData } from "@/types/chatwoot";
+import type { DashboardData, DashboardPeriodPreset } from "@/types/chatwoot";
 
 interface UseDashboardResult {
   data: DashboardData | null;
@@ -12,7 +12,12 @@ interface UseDashboardResult {
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
-export function useDashboard(intervalMs = 30_000): UseDashboardResult {
+export function useDashboard(
+  since?: number,
+  until?: number,
+  preset?: DashboardPeriodPreset,
+  intervalMs = 30_000,
+): UseDashboardResult {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -23,12 +28,14 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
   const fetchingRef = useRef(false);
   const mountedRef = useRef(false);
   const hasDataRef = useRef(false);
+  const requestSeqRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (fetchingRef.current) return;
 
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
     fetchingRef.current = true;
-    setError(null);
 
     if (hasDataRef.current) {
       setRefreshing(true);
@@ -36,16 +43,22 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
       setLoading(true);
     }
 
-    abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    let didTimeout = false;
 
     const timeoutId = window.setTimeout(() => {
+      didTimeout = true;
       controller.abort();
     }, REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch(`/api/dashboard?t=${Date.now()}`, {
+      const params = new URLSearchParams({ t: String(Date.now()) });
+      if (typeof since === "number") params.set("since", String(since));
+      if (typeof until === "number") params.set("until", String(until));
+      if (preset) params.set("preset", preset);
+
+      const response = await fetch(`/api/dashboard?${params.toString()}`, {
         method: "GET",
         cache: "no-store",
         headers: {
@@ -63,14 +76,17 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
         );
       }
 
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
 
       setData(payload as DashboardData);
       hasDataRef.current = true;
       setLastUpdated(new Date());
+      setError(null);
     } catch (err) {
-      if (!mountedRef.current || controller.signal.aborted) {
-        if (controller.signal.aborted && mountedRef.current) {
+      if (!mountedRef.current || requestSeq !== requestSeqRef.current) return;
+
+      if (controller.signal.aborted) {
+        if (didTimeout) {
           setError("A atualização excedeu o limite de 60 segundos.");
         }
         return;
@@ -84,7 +100,7 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
     } finally {
       window.clearTimeout(timeoutId);
 
-      if (mountedRef.current) {
+      if (mountedRef.current && requestSeq === requestSeqRef.current) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -93,12 +109,15 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
         abortRef.current = null;
       }
 
-      fetchingRef.current = false;
+      if (requestSeq === requestSeqRef.current) {
+        fetchingRef.current = false;
+      }
     }
-  }, []);
+  }, [since, until, preset]);
 
   useEffect(() => {
     mountedRef.current = true;
+
     void fetchData();
 
     const intervalId = window.setInterval(() => {
@@ -109,6 +128,7 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
       mountedRef.current = false;
       window.clearInterval(intervalId);
       abortRef.current?.abort();
+      fetchingRef.current = false;
     };
   }, [fetchData, intervalMs]);
 

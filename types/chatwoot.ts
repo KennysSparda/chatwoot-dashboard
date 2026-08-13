@@ -235,13 +235,12 @@ export interface DashboardData {
     reportPeriod: {
       since: number;
       until: number;
+      preset: DashboardPeriodPreset;
     };
     requestDurationMs?: number;
   };
   chartData: {
-    day: ReportDataPoint[];
-    week: ReportDataPoint[];
-    month: ReportDataPoint[];
+    selected: ReportDataPoint[];
   };
 }
 
@@ -276,4 +275,18 @@ export interface CsatMetrics {
 export interface ReportDataPoint {
   value: number;
   timestamp: number;
+}
+
+export type DashboardPeriodPreset =
+  | "today"
+  | "last7days"
+  | "last30days"
+  | "custom";
+
+export interface DashboardPeriod {
+  preset: DashboardPeriodPreset;
+  startDate: string;
+  endDate: string;
+  since: number;
+  until: number;
 }

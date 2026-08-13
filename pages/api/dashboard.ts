@@ -1,8 +1,33 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { ChatwootClient } from "@/lib/chatwoot";
-import type { DashboardData } from "@/types/chatwoot";
+import type { DashboardData, DashboardPeriodPreset } from "@/types/chatwoot";
 
 type ApiResponse = DashboardData | { error: string };
+
+function parseTimestamp(value: string | string[] | undefined): number | undefined {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+  if (!rawValue) return undefined;
+
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function parsePreset(
+  value: string | string[] | undefined,
+): DashboardPeriodPreset | undefined {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (
+    rawValue === "today" ||
+    rawValue === "last7days" ||
+    rawValue === "last30days" ||
+    rawValue === "custom"
+  ) {
+    return rawValue;
+  }
+
+  return undefined;
+}
 
 export default async function handler(
   req: NextApiRequest,
@@ -34,6 +59,22 @@ export default async function handler(
     });
   }
 
+  const since = parseTimestamp(req.query.since);
+  const until = parseTimestamp(req.query.until);
+  const preset = parsePreset(req.query.preset);
+
+  if ((since && !until) || (!since && until)) {
+    return res.status(400).json({
+      error: "Informe since e until juntos para filtrar por período.",
+    });
+  }
+
+  if (since && until && since >= until) {
+    return res.status(400).json({
+      error: "A data inicial precisa ser menor que a data final.",
+    });
+  }
+
   try {
     const client = new ChatwootClient({
       baseUrl,
@@ -41,8 +82,7 @@ export default async function handler(
       accessToken,
     });
 
-    const data = await client.getDashboardData();
-
+    const data = await client.getDashboardData(since, until, preset);
     return res.status(200).json(data);
   } catch (err) {
     const message =

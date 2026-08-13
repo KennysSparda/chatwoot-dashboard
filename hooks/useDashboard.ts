@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DashboardData } from "@/types/chatwoot";
+import type { DashboardData, DashboardPeriodPreset } from "@/types/chatwoot";
 
 interface UseDashboardResult {
   data: DashboardData | null;
@@ -12,7 +12,12 @@ interface UseDashboardResult {
 
 const REQUEST_TIMEOUT_MS = 60_000;
 
-export function useDashboard(intervalMs = 30_000): UseDashboardResult {
+export function useDashboard(
+  since?: number,
+  until?: number,
+  preset?: DashboardPeriodPreset,
+  intervalMs = 30_000,
+): UseDashboardResult {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -45,7 +50,12 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
     }, REQUEST_TIMEOUT_MS);
 
     try {
-      const response = await fetch(`/api/dashboard?t=${Date.now()}`, {
+      const params = new URLSearchParams({ t: String(Date.now()) });
+      if (typeof since === "number") params.set("since", String(since));
+      if (typeof until === "number") params.set("until", String(until));
+      if (preset) params.set("preset", preset);
+
+      const response = await fetch(`/api/dashboard?${params.toString()}`, {
         method: "GET",
         cache: "no-store",
         headers: {
@@ -95,10 +105,11 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
 
       fetchingRef.current = false;
     }
-  }, []);
+  }, [since, until, preset]);
 
   useEffect(() => {
     mountedRef.current = true;
+
     void fetchData();
 
     const intervalId = window.setInterval(() => {
@@ -109,6 +120,7 @@ export function useDashboard(intervalMs = 30_000): UseDashboardResult {
       mountedRef.current = false;
       window.clearInterval(intervalId);
       abortRef.current?.abort();
+      fetchingRef.current = false;
     };
   }, [fetchData, intervalMs]);
 

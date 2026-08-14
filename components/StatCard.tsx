@@ -85,8 +85,8 @@ export default function StatCard({
           <>
             <p
               className={clsx(
-                "app-number-pop truncate text-3xl font-bold leading-none tracking-tight text-[var(--text-main)]",
-                "sm:text-4xl xl:text-2xl 2xl:text-3xl",
+                "app-number-pop truncate text-5xl font-bold leading-none tracking-tight text-[var(--text-main)]",
+                "sm:text-5xl xl:text-5xl 5xl:text-5xl",
                 alert && "text-[var(--danger)]",
                 accent && !alert && "text-[var(--brand)]",
               )}

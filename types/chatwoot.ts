@@ -290,3 +290,11 @@ export interface DashboardPeriod {
   since: number;
   until: number;
 }
+
+export interface MaxWaitCardProps {
+  value: string;
+  contact?: string;
+  agent?: string;
+  waitingSeconds?: number;
+  loading?: boolean;
+}

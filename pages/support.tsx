@@ -113,7 +113,7 @@ export default function SupportPage() {
           </div>
         )}
 
-        <section className="mb-4 grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 [&>*]:min-w-0 xl:[&>*]:!p-3">
+        <section className="mb-4 grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 [&>*]:min-w-0 xl:[&>*]:!p-3">
           <AgentGoalCard
             online={onlineAgentsCount}
             busy={busyAgentsCount}

@@ -9,8 +9,6 @@ function getEmotion(waitingSeconds = 0) {
   if (minutes < 5) {
     return {
       emoji: "🙂",
-      bg: "bg-sky-50",
-      text: "text-sky-700",
       pulse: false,
     };
   }
@@ -18,16 +16,12 @@ function getEmotion(waitingSeconds = 0) {
   if (minutes < 10) {
     return {
       emoji: "😟",
-      bg: "bg-amber-50",
-      text: "text-amber-700",
       pulse: false,
     };
   }
 
   return {
     emoji: "😭",
-    bg: "bg-red-50",
-    text: "text-red-600",
     pulse: true,
   };
 }
@@ -42,53 +36,80 @@ export default function MaxWaitCard({
   const emotion = getEmotion(waitingSeconds);
 
   return (
-    <article className="relative overflow-hidden rounded-xl border border-[var(--danger-border)] bg-[var(--danger-soft)] p-4 shadow-[var(--shadow-card)]">
-      <div className="absolute inset-x-0 top-0 h-1 bg-[var(--danger)]" />
-
-      <div className="flex items-start justify-between">
-        <p className="text-sm font-bold uppercase tracking-wide text-[var(--danger)]">
-          MAIOR ESPERA
-        </p>
-
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--danger-border)] bg-white/70 text-[var(--danger)]">
-          <TimerReset size={18} />
+    <article
+      className={clsx(
+        "relative flex min-h-[140px] min-w-0 flex-col items-center justify-center rounded-xl border p-4 text-center shadow-[var(--shadow-card)] transition-colors",
+        "border-[var(--danger-border)] bg-[var(--danger-soft)]",
+        "sm:min-h-[148px] sm:p-5",
+        "xl:min-h-[140px] xl:p-4",
+        "2xl:min-h-[152px] 2xl:p-5",
+      )}
+      aria-busy={loading}
+    >
+      {/* Emoji Solto e Destaque: Sem caixinha/fundo, tamanho expandido */}
+      <div
+        className={clsx(
+          "absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none sm:left-5",
+          emotion.pulse && "animate-pulse",
+        )}
+      >
+        <span className="text-4xl sm:text-5xl 2xl:text-6xl leading-none select-none">
+          {emotion.emoji}
         </span>
       </div>
 
-      {loading ? (
-        <div className="mt-6 h-20 animate-pulse rounded bg-gray-200" />
-      ) : (
-        <div className="mt-5 flex items-center gap-5">
-          <div
-            className={clsx(
-              "flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl",
-              emotion.bg,
-              emotion.pulse && "animate-pulse",
-            )}
-          >
-            <span className="text-7xl leading-none">{emotion.emoji}</span>
-          </div>
+      {/* Bloco Central de Texto (px-16 garante espaço para não encostar no emoji nem no ícone) */}
+      <div className="flex w-full min-w-0 flex-col items-center justify-center px-14 sm:px-18">
+        <p className="min-w-0 max-w-full truncate text-xs font-bold uppercase tracking-wide text-[var(--danger)] sm:text-sm xl:text-[11px] 2xl:text-xs">
+          MAIOR ESPERA
+        </p>
 
-          <div className="min-w-0 flex-1">
-            <div
-              className={clsx(
-                "text-5xl font-extrabold leading-none",
-                emotion.text,
-              )}
+        {loading ? (
+          <div
+            className="mt-3 flex w-full flex-col items-center space-y-2"
+            aria-label="Carregando indicador"
+          >
+            <div className="h-8 w-24 animate-pulse rounded-md bg-[var(--danger-border)] opacity-50" />
+            <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--danger-border)] opacity-50" />
+          </div>
+        ) : (
+          <>
+            <p
+              className="app-number-pop mt-1 truncate text-center text-4xl font-extrabold leading-none tracking-tight text-[var(--text-main)] sm:text-5xl xl:text-5xl"
+              title={String(value)}
             >
               {value}
-            </div>
+            </p>
 
-            <div className="mt-3 truncate text-base font-semibold text-[var(--text-muted)]">
+            <p
+              className="mt-2 min-w-0 max-w-full truncate text-xs font-semibold text-[var(--text-muted)] sm:text-sm xl:text-[11px] 2xl:text-xs"
+              title={contact || "Fila sem espera"}
+            >
               {contact || "Fila sem espera"}
-            </div>
+            </p>
 
-            <div className="mt-1 truncate text-sm text-[var(--text-muted)]">
-              {agent ? `Agente: ${agent}` : "Não atribuído"}
-            </div>
-          </div>
-        </div>
-      )}
+            {agent && (
+              <p
+                className="mt-0.5 min-w-0 max-w-full truncate text-[11px] text-[var(--text-muted)] sm:text-xs"
+                title={`Agente: ${agent}`}
+              >
+                Agente: {agent}
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Ícone na Direita: Mantido no meio vertical */}
+      <span
+        className={clsx(
+          "absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center text-[var(--danger)] opacity-80 pointer-events-none sm:right-5",
+          "[&_svg]:h-7 [&_svg]:w-7 sm:[&_svg]:h-8 sm:[&_svg]:w-8 2xl:[&_svg]:h-9 2xl:[&_svg]:w-9",
+        )}
+        aria-hidden="true"
+      >
+        <TimerReset />
+      </span>
     </article>
   );
 }

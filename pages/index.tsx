@@ -113,7 +113,7 @@ export default function SupportPage() {
           </div>
         )}
 
-        <section className="mb-4 grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 [&>*]:min-w-0 xl:[&>*]:!p-3">
+        <section className="mb-4 grid shrink-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 [&>*]:min-w-0 xl:[&>*]:!p-3">
           <AgentGoalCard
             online={onlineAgentsCount}
             busy={busyAgentsCount}
@@ -123,7 +123,7 @@ export default function SupportPage() {
           />
 
           <StatCard
-            label="📥 Chats Abertos"
+            label="Chats Abertos"
             value={data?.counts.open ?? "—"}
             sub="em atendimento"
             icon={<Inbox size={16} />}
@@ -131,31 +131,14 @@ export default function SupportPage() {
           />
 
           <StatCard
-            label="🤖 Chats IA"
+            label="Chats IA"
             value={data?.counts.pending ?? "—"}
             sub="pendentes com ANA"
             icon={<Bot size={16} />}
             loading={loading && !data}
           />
-          {/* 
           <StatCard
-            label="⭐ CSAT"
-            value={
-              data?.csatMetrics?.satisfactionPercentage !== undefined
-                ? `${data.csatMetrics.satisfactionPercentage}%`
-                : "—"
-            }
-            sub={
-              data?.csatMetrics?.totalResponses
-                ? `${data.csatMetrics.totalResponses} avaliações · média ${data.csatMetrics.averageRating}`
-                : "Sem avaliações"
-            }
-            icon={<Star size={16} />}
-            loading={loading && !data}
-          /> */}
-
-          <StatCard
-            label="🧭 Não Atribuídas"
+            label="Não Atribuídas"
             value={data?.counts.unassigned ?? "—"}
             sub="aguardando atribuição"
             icon={<MessageSquareOff size={16} />}
@@ -164,7 +147,7 @@ export default function SupportPage() {
           />
 
           <StatCard
-            label="⏱️ Aguardando"
+            label="Aguardando"
             value={data?.queue.waitingCount ?? "—"}
             sub="em fila agora"
             icon={<Clock size={16} />}
@@ -193,7 +176,7 @@ export default function SupportPage() {
           <section className="min-w-0 xl:col-span-5 xl:min-h-0 xl:overflow-hidden [&>*]:min-h-0 [&>*]:overflow-hidden">
             <ConversationChartCard
               id="selected-period"
-              title={`📊 Volume de Chats — ${periodLabel}`}
+              title={`Volume de Chats — ${periodLabel}`}
               data={data?.chartData?.selected ?? []}
               loading={loading && !data}
               isHourly={period.preset === "today"}

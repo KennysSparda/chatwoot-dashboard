@@ -11,8 +11,6 @@ interface AgentGoalCardProps {
 }
 
 // Posições seguras dentro da janela visível do recorte (48x48 com scale 0.6).
-// NÃO adicione posições fora do intervalo x:[40,120] / y:[40,120] aqui,
-// senão o knob é cortado pelo overflow-hidden do container.
 const GEAR_POS = {
   N: { x: 80, y: 80 },
   "1": { x: 53, y: 61 },
@@ -60,9 +58,7 @@ export default function AgentGoalCard({
     }
   }, [goalReached, loading, launch, stop]);
 
-  // Lógica de animação em H do Câmbio.
-  // O knob físico só se move dentro das posições reais (N a 6).
-  // "Turbo" é tratado como um estado visual separado, não uma posição nova.
+  // Lógica de animação em H do Câmbio
   useEffect(() => {
     if (loading) return;
 
@@ -127,100 +123,83 @@ export default function AgentGoalCard({
   };
 
   const emoji = goalReached ? "😎" : "😭";
-
-  // Rótulo mostrado no badge ativo da fileira de indicadores.
-  // Quando isTurbo, destaca "Turbo" em vez do número da marcha.
   const activePill = isTurbo ? "Turbo" : activeGear;
 
   return (
-    <div
+    <article
       className={clsx(
-        "relative overflow-hidden rounded-xl border p-5 shadow-[var(--shadow-card)] transition-all duration-500",
+        "relative flex min-h-[140px] min-w-0 flex-col justify-between rounded-xl border p-4 shadow-[var(--shadow-card)] transition-colors",
+        "sm:min-h-[148px] sm:p-5",
+        "xl:min-h-[140px] xl:p-4",
+        "2xl:min-h-[152px] 2xl:p-5",
         goalReached
           ? "border-[var(--success-border)] bg-[var(--success-soft)]"
           : "border-[var(--danger-border)] bg-[var(--danger-soft)]",
       )}
+      aria-busy={loading}
     >
-      <div
-        className={clsx(
-          "absolute inset-x-0 top-0 h-1 transition-colors duration-500",
-          goalReached ? "bg-[var(--success)]" : "bg-[var(--danger)]",
-        )}
-      />
+      {/* Bloco Superior / Central: Emoji na Esquerda, Textos no Centro, Câmbio na Direita */}
+      <div className="relative flex w-full flex-1 items-center justify-center min-h-[80px]">
+        {/* Emoji de Humor na Esquerda */}
+        <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none">
+          <span
+            role="img"
+            aria-label={goalReached ? "Meta atingida" : "Aguardando meta"}
+            className={clsx(
+              "text-4xl sm:text-5xl 2xl:text-6xl leading-none select-none transition-transform duration-300",
+              goalReached && "scale-110",
+            )}
+          >
+            {emoji}
+          </span>
+        </div>
 
-      <div className="flex items-start justify-between gap-3 h-full">
-        {/* Painel Esquerdo */}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium uppercase tracking-wide text-[var(--text-muted)]">
-            👥 Agentes Ativos
+        {/* Informações Centralizadas */}
+        <div className="flex w-full min-w-0 flex-col items-center justify-center px-14 sm:px-16 text-center">
+          <p className="min-w-0 max-w-full truncate text-xs font-bold uppercase tracking-wide text-[var(--text-muted)] sm:text-sm xl:text-[11px] 2xl:text-xs">
+            Agentes Ativos
           </p>
 
           {loading ? (
-            <div className="mt-4 h-10 w-24 animate-pulse rounded-md bg-[var(--card-border)]" />
+            <div
+              className="mt-2 flex w-full flex-col items-center space-y-2"
+              aria-label="Carregando indicador"
+            >
+              <div className="h-8 w-24 animate-pulse rounded-md bg-[var(--card-border)]" />
+              <div className="h-3 w-4/5 animate-pulse rounded bg-[var(--card-border)]" />
+            </div>
           ) : (
-            <div className="mt-3 flex items-end gap-2">
-              <p
-                className={clsx(
-                  "text-3xl font-bold tabular-nums transition-colors duration-500 app-number-pop",
-                  goalReached
-                    ? "text-[var(--success)]"
-                    : "text-[var(--danger)]",
-                )}
-              >
-                {online}
-              </p>
-              <p className="mb-1 text-sm font-medium text-[var(--text-muted)]">
-                / {goal}
-              </p>
-            </div>
-          )}
+            <>
+              <div className="mt-1 flex items-baseline justify-center gap-1">
+                <span
+                  className={clsx(
+                    "app-number-pop text-4xl font-extrabold leading-none tracking-tight sm:text-5xl xl:text-5xl transition-colors duration-500",
+                    goalReached
+                      ? "text-[var(--success)]"
+                      : "text-[var(--danger)]",
+                  )}
+                >
+                  {online}
+                </span>
+                <span className="text-xs font-bold text-[var(--text-muted)] sm:text-sm">
+                  / {goal}
+                </span>
+              </div>
 
-          <p className="mt-1 truncate text-xs text-[var(--text-muted)]">
-            {total} no total · {busy} ocupados
-          </p>
-
-          {!loading && (
-            <div className="mt-4 flex flex-wrap items-center gap-1.5 font-mono">
-              {(["N", "1", "2", "3", "4", "5", "6", "Turbo"] as const).map(
-                (g) => {
-                  const isActive = activePill === g;
-                  return (
-                    <span
-                      key={g}
-                      className={clsx(
-                        "flex h-5 items-center justify-center rounded transition-all duration-300 text-[10px] font-bold px-1",
-                        g === "Turbo" ? "min-w-[34px]" : "w-5",
-                        isActive
-                          ? g === "Turbo"
-                            ? "bg-orange-500 text-white shadow-sm border-transparent"
-                            : goalReached
-                              ? "bg-[var(--success)] text-white shadow-sm border-transparent"
-                              : "bg-[var(--danger)] text-white shadow-sm border-transparent"
-                          : "bg-[var(--app-bg-soft)] text-[var(--text-muted)] border border-[var(--card-border)]",
-                      )}
-                    >
-                      {g}
-                    </span>
-                  );
-                },
-              )}
-            </div>
+              <p className="mt-1 min-w-0 max-w-full truncate text-xs text-[var(--text-muted)] sm:text-sm xl:text-[11px] 2xl:text-xs">
+                {total} no total ·{" "}
+                <span className="font-semibold">{busy} ocupados</span>
+              </p>
+            </>
           )}
         </div>
 
-        {/* Painel Direito: Câmbio + Emoji */}
-        {loading ? (
-          <div className="flex shrink-0 items-center gap-2 self-center">
+        {/* Componente Dinâmico de Câmbio H na Direita */}
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center justify-center">
+          {loading ? (
             <div className="h-12 w-12 animate-pulse rounded-xl bg-[var(--card-border)]" />
-            <div className="h-14 w-14 animate-pulse rounded-xl bg-[var(--card-border)]" />
-          </div>
-        ) : (
-          <div className="flex shrink-0 items-center gap-2 self-center">
-            {/* Câmbio */}
-            <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-[var(--card-border)] bg-white dark:bg-black/20 shadow-sm flex items-center justify-center">
-              {/* Badge de Turbo: sobreposição CONTROLADA no canto,
-                  fora do container clipado — não é o mesmo tipo de
-                  vazamento visto antes, é um badge intencional. */}
+          ) : (
+            <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-[var(--card-border)] bg-white dark:bg-black/20 shadow-sm flex items-center justify-center shrink-0">
               {isTurbo && (
                 <span
                   className="absolute -top-1.5 -right-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-[10px] shadow-sm animate-pulse"
@@ -286,21 +265,39 @@ export default function AgentGoalCard({
                 </svg>
               </div>
             </div>
-
-            {/* Emoji de humor da meta */}
-            <span
-              role="img"
-              aria-label={goalReached ? "Meta atingida" : "Aguardando meta"}
-              className={clsx(
-                "text-6xl leading-none transition-transform duration-300",
-                goalReached && "scale-110",
-              )}
-            >
-              {emoji}
-            </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Seção Inferior: Indicadores de Marcha Preenchendo 100% da Largura */}
+      {!loading && (
+        <div className="mt-3 w-full">
+          <div className="flex w-full items-center justify-between gap-1 font-mono">
+            {(["N", "1", "2", "3", "4", "5", "6", "Turbo"] as const).map(
+              (g) => {
+                const isActive = activePill === g;
+                return (
+                  <span
+                    key={g}
+                    className={clsx(
+                      "flex h-6 flex-1 items-center justify-center rounded transition-all duration-300 text-[10px] sm:text-xs font-bold",
+                      isActive
+                        ? g === "Turbo"
+                          ? "bg-orange-500 text-white shadow-sm border-transparent"
+                          : goalReached
+                            ? "bg-[var(--success)] text-white shadow-sm border-transparent"
+                            : "bg-[var(--danger)] text-white shadow-sm border-transparent"
+                        : "bg-[var(--app-bg-soft)] text-[var(--text-muted)] border border-[var(--card-border)]",
+                    )}
+                  >
+                    {g}
+                  </span>
+                );
+              },
+            )}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }

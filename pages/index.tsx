@@ -118,7 +118,7 @@ export default function SupportPage() {
             online={onlineAgentsCount}
             busy={busyAgentsCount}
             total={totalAgentsCount}
-            goal={6}
+            goal={10}
             loading={loading && !data}
           />
 

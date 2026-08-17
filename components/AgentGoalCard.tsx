@@ -27,11 +27,11 @@ export default function AgentGoalCard({
   online,
   busy,
   total,
-  goal = 6,
+  goal = 10,
   loading = false,
 }: AgentGoalCardProps) {
   const goalReached = online >= goal;
-  const isTurbo = online > 6;
+  const isTurbo = goalReached;
 
   const { launch, stop } = useConfetti();
 

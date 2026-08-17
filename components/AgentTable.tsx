@@ -82,7 +82,8 @@ function normalizeRows(input: AgentTableProps): DashboardAgent[] {
       email: agent?.email ?? live?.email ?? metric?.email ?? "",
       avatarUrl:
         agent?.avatar_url ?? agent?.thumbnail ?? live?.thumbnail ?? null,
-      availability: live?.availability ?? agent?.availability_status ?? "offline",
+      availability:
+        live?.availability ?? agent?.availability_status ?? "offline",
       openConversations:
         live?.metric?.open ??
         metric?.open_conversations_count ??
@@ -100,7 +101,9 @@ function normalizeRows(input: AgentTableProps): DashboardAgent[] {
           ? metric.avg_resolution_time
           : null,
       avgReplyTime:
-        typeof metric?.avg_reply_time === "number" ? metric.avg_reply_time : null,
+        typeof metric?.avg_reply_time === "number"
+          ? metric.avg_reply_time
+          : null,
     };
   });
 }
@@ -250,7 +253,9 @@ export default function AgentTable(props: AgentTableProps) {
                     title={statusLabel(row.availability)}
                   >
                     {statusDot(row.availability)}
-                    <span className="truncate">{statusLabel(row.availability)}</span>
+                    <span className="truncate">
+                      {statusLabel(row.availability)}
+                    </span>
                   </div>
                 </td>
 
@@ -275,7 +280,7 @@ export default function AgentTable(props: AgentTableProps) {
 
                 <td
                   className="px-2 py-2.5 text-right text-[11px] tabular-nums text-[var(--text-soft)] 2xl:px-3 2xl:text-xs"
-                  title={`Primeira resposta: ${formatSeconds(row.avgFirstResponseTime)}`}
+                  title={`Tempo médio de primeira resposta: ${formatSeconds(row.avgFirstResponseTime)}`}
                 >
                   {formatSeconds(row.avgFirstResponseTime)}
                 </td>
